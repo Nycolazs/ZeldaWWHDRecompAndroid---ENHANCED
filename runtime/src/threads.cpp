@@ -495,7 +495,7 @@ __attribute__((noinline)) static void try_entry_park(HostThread* t, Cpu* c) {
 }
 
 namespace threads {
-void park_sleep_until(std::chrono::steady_clock::time_point tp) {
+void park_sleep_until(std::chrono::steady_clock::time_point tp, bool precise) {
     HostThread* t = t_self;
     if (t) {
         t->wait_kind = W_SLEEP;
@@ -503,7 +503,31 @@ void park_sleep_until(std::chrono::steady_clock::time_point tp) {
         t->wst.store(kParked);
     }
     block_begin();
-    std::this_thread::sleep_until(tp);
+    if (precise) {
+        // Sleep timers resume late (on Android often well past 1 ms), so a vsync wait that only
+        // sleeps starts the next frame late: the "game late" flips of the pacing log. The last part
+        // is spun with the guest core released. The window follows the measured lateness: the
+        // largest of the last 120 wakes plus a margin, 0.5..2 ms; a wake past the deadline goes
+        // straight back to 2 ms (from the official project). WWHD_VSYNC_SPIN_US=n fixes it.
+        using us = std::chrono::microseconds;
+        static const long fixedUs = getenv("WWHD_VSYNC_SPIN_US") ? atol(getenv("WWHD_VSYNC_SPIN_US")) : -1;
+        static thread_local us window{fixedUs >= 0 ? fixedUs : 2000}, peak{0};
+        static thread_local int wakes = 0;
+        const auto sleepDeadline = tp - window;
+        if (std::chrono::steady_clock::now() < sleepDeadline) {
+            std::this_thread::sleep_until(sleepDeadline);
+            const auto woke = std::chrono::steady_clock::now();
+            peak = std::max(peak, std::chrono::duration_cast<us>(woke - sleepDeadline));
+            if (fixedUs < 0 && (woke >= tp || ++wakes == 120)) {
+                window = woke >= tp ? us{2000} : std::clamp(peak + us{250}, us{500}, us{2000});
+                peak = us{0};
+                wakes = 0;
+            }
+        }
+        while (std::chrono::steady_clock::now() < tp) {}
+    } else {
+        std::this_thread::sleep_until(tp);
+    }
     if (t) park_gate(t);
     block_end();
 }

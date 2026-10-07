@@ -707,7 +707,7 @@ HLE(gx2, GX2GetSwapStatus) {
 }
 HLE(gx2, GX2SetSwapInterval) { g_swap_interval = std::max<uint32>(arg(c, 0), 1); }
 HLE(gx2, GX2WaitForVsync) {
-    threads::park_sleep_until(next_vsync_time());
+    threads::park_sleep_until(next_vsync_time(), true);  // precise: the frame starts on its vsync
     std::lock_guard<std::mutex> lk(g_flip_mutex);
     update_flips();
     static uint64_t calls = 0;
