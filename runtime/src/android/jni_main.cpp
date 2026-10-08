@@ -350,6 +350,12 @@ JNI_FN(jboolean, buildsGameCode)(JNIEnv*, jclass) { return false; }
 #endif
 
 // boots the runtime and starts the game (once per process)
+// a mod folder whose content/ files replace the game's (before start; "" = none)
+JNI_FN(void, setContentOverlay)(JNIEnv* env, jclass, jstring dir) {
+    config::content_overlay = jstr(env, dir);
+    if (!config::content_overlay.empty()) LOG("[mods] content overlay %s", config::content_overlay.c_str());
+}
+
 JNI_FN(void, start)(JNIEnv* env, jclass, jstring gameDir, jstring saveDir, jstring cacheDir, jstring workDir) {
     if (g_started.exchange(true)) return;
 #ifdef WWHD_RECOMP

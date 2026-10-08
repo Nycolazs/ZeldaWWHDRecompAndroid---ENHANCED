@@ -4,6 +4,22 @@
 
     <string name="setup_text">The game files were not found or don\'t match this build.\n\nThis app contains only the recompiled code built from your own copy of the game; it needs the extracted game files from the same dump. Extract them on a computer (see README.md: tools/wudextract.py), then copy the resulting folder (with code/, content/ and meta/ inside) to:\n\n%1$s\n\nFor example: adb push game /sdcard/Android/data/org.wwhdrecomp.app/files/\n\nProblem: %2$s</string>
     <string name="touch_skip">Skip</string>
+    <string name="opt_ptbr">Portuguese (Brazil) translation</string>
+    <string name="opt_ptbr_hint">The game\'s text in Brazilian Portuguese (Triforce-Heroes fan translation)</string>
+    <string name="ptbr_not_installed">not installed</string>
+    <string name="ptbr_about">Plays the game with the Brazilian Portuguese fan translation by Triforce-Heroes (triforce-heroes.com.br). The translation replaces the English text, so turning it on sets the game language to English. If it isn\'t installed, choose its folder (the Cemu version or the console version, the folder with rules.txt).</string>
+    <string name="ptbr_install">Install the translation…</string>
+    <string name="ptbr_install_hint">Choose the translation\'s folder</string>
+    <string name="ptbr_install_other">Install another version…</string>
+    <string name="ptbr_installed">Installed: %1$s</string>
+    <string name="ptbr_toggle_hint">Applies after a restart</string>
+    <string name="ptbr_remove">Remove the translation</string>
+    <string name="ptbr_remove_confirm">Delete the installed translation files? You can install them again later.</string>
+    <string name="ptbr_installing">Installing the translation…</string>
+    <string name="ptbr_failed">The translation could not be installed: %1$s</string>
+    <string name="ptbr_not_found">No translation files (permanent_2d_*.pack) in that folder.</string>
+    <string name="ptbr_on_restart">The translation is on and the game language is English. Restart the game to play in Portuguese.</string>
+    <string name="ptbr_off_restart">The translation is off. Restart the game to apply.</string>
     <string name="opt_camera_stick">Camera stick</string>
     <string name="opt_camera_stick_hint">A stick on the right that turns the camera (move it in Edit touch layout). Swiping the right side still works</string>
     <string name="opt_hud">HUD positions</string>

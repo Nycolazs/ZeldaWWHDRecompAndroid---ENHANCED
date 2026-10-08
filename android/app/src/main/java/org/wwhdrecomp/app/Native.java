@@ -17,6 +17,8 @@ final class Native {
     static native String extractGame(int fd, byte[] discKey, byte[] commonKey, String outDir);
     /** The same from a Wii U archive (.wua, needs no keys). */
     static native String extractArchive(int fd, String outDir);
+    /** A mod folder whose content/ files replace the game's (before start; "" = none). */
+    static native void setContentOverlay(String dir);
     /** {bytes written, total} of the running extraction. */
     static native long[] extractProgress();
     static native void extractCancel();

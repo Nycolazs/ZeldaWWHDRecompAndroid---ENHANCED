@@ -489,6 +489,31 @@ final class OptionsMenu extends Dialog {
             submenu(R.string.opt_capture, R.string.opt_capture_hint, "", () -> Native.setOption("capture", 1));
     }
 
+    // the Brazilian Portuguese fan translation (Translation.java)
+    private void ptbrPage() {
+        pageTitle(R.string.opt_ptbr);
+        note(a.getString(R.string.ptbr_about));
+        if (!a.ptbrInstalled()) {
+            submenu(R.string.ptbr_install, R.string.ptbr_install_hint, "", () -> a.pickFolder(MainActivity.PICK_TRANSLATION));
+            return;
+        }
+        String label = Translation.label(a.ptbrDir());
+        if (!label.isEmpty()) note(a.getString(R.string.ptbr_installed, label));
+        toggle(R.string.opt_ptbr, R.string.ptbr_toggle_hint, a.ptbrEnabled(), on -> {
+            dismiss();
+            a.setPtbr(on);
+        });
+        submenu(R.string.ptbr_install_other, 0, "", () -> a.pickFolder(MainActivity.PICK_TRANSLATION));
+        submenu(R.string.ptbr_remove, 0, "", () -> new GameDialog(getContext()).title(R.string.ptbr_remove).message(R.string.ptbr_remove_confirm)
+                .button(R.string.opt_cancel, null)
+                .button(R.string.ptbr_remove, () -> {
+                    boolean was = a.ptbrEnabled();
+                    a.removePtbr();
+                    fill();
+                    if (was) a.askRestartForLanguage();
+                }).show());
+    }
+
     // cheats (runtime/src/mods/cheats.cpp): one-shot save data edits, and infinite health / magic / ammo
     private void cheatsPage() {
         note(a.getString(R.string.cheat_note));
@@ -540,6 +565,8 @@ final class OptionsMenu extends Dialog {
     }
 
     private void mods() {
+        submenu(R.string.opt_ptbr, R.string.opt_ptbr_hint, a.ptbrInstalled() ? a.getString(a.ptbrEnabled() ? R.string.opt_on : R.string.opt_off)
+                : a.getString(R.string.ptbr_not_installed), () -> openPage(this::ptbrPage));
         submenu(R.string.opt_cheats, R.string.opt_cheats_hint, "", () -> openPage(this::cheatsPage));
         int[] labels = {R.string.opt_mod_direct_camera, R.string.opt_mod_first_person, R.string.opt_mod_climb,
                         R.string.opt_mod_quick_doors, R.string.opt_mod_fast_scenes};

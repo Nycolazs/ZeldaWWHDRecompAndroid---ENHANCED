@@ -119,6 +119,25 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     }
 
     /** after the options menu closed with another language than it opened with */
+    // ---- the Brazilian Portuguese translation (Translation.java)
+    File ptbrDir() { return Translation.dir(this, baseDir()); }
+    boolean ptbrInstalled() { return Translation.installed(ptbrDir()); }
+    boolean ptbrEnabled() { return prefs.getBoolean("mod_ptbr", false) && ptbrInstalled(); }
+
+    /** on: the translation replaces the English text, so the game's language becomes English; restarts */
+    void setPtbr(boolean on) {
+        prefs.edit().putBoolean("mod_ptbr", on).commit();
+        if (on && !gameLanguage().equals("en")) setGameLanguage("en");
+        new GameDialog(this).title(R.string.opt_ptbr).message(on ? R.string.ptbr_on_restart : R.string.ptbr_off_restart)
+                .button(R.string.gpu_driver_later, null)
+                .button(R.string.res_restart_now, this::restartApp).show();
+    }
+
+    void removePtbr() {
+        prefs.edit().putBoolean("mod_ptbr", false).commit();
+        Translation.remove(ptbrDir());
+    }
+
     void askRestartForLanguage() {
         new GameDialog(this).title(R.string.opt_language).message(R.string.language_restart)
                 .button(R.string.gpu_driver_later, null)
@@ -234,6 +253,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             }, "icons").start();
         }
         String failedDriver = applyGpuDriver();
+        Translation.installBundled(this, ptbrDir());  // a personal build's own copy (once)
+        Native.setContentOverlay(ptbrEnabled() ? ptbrDir().getAbsolutePath() : "");
         Native.start(gameDir(), new File(base, "save").getAbsolutePath(),
                 new File(getNoBackupFilesDir(), "shadercache").getAbsolutePath(), base.getAbsolutePath());
         started = true;
@@ -1467,7 +1488,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     // the menus' size, on top of fitting them to the screen (GameUi.fitted)
     static final float[] MENU_SIZES = {0.7f, 0.8f, 0.9f, 1f, 1.15f, 1.3f};
 
-    static final int PICK_EXPORT = 2, PICK_IMPORT = 3, PICK_DISC = 4;
+    static final int PICK_EXPORT = 2, PICK_IMPORT = 3, PICK_DISC = 4, PICK_TRANSLATION = 5;
     private boolean exportSave = true, exportStates = true;
 
     void chooseExport() {
@@ -1590,6 +1611,18 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         super.onActivityResult(request, result, data);
         if (request == PICK_DRIVER && result == RESULT_OK && data != null && data.getData() != null) {
             installDriver(data.getData());
+            return;
+        }
+        if (request == PICK_TRANSLATION && result == RESULT_OK && data != null && data.getData() != null) {
+            android.net.Uri tree = data.getData();
+            withProgress(R.string.ptbr_installing, () -> Translation.install(this, tree, ptbrDir()), err -> {
+                if (err != null) {
+                    new GameDialog(this).title(R.string.opt_ptbr).message(getString(R.string.ptbr_failed, err.startsWith("!") ? err.substring(1) : err))
+                            .button(R.string.opt_ok, null).show();
+                    return;
+                }
+                setPtbr(true);
+            });
             return;
         }
         if (request == PICK_DISC && result == RESULT_OK && data != null && data.getData() != null) {

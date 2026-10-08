@@ -23,6 +23,7 @@
 bool g_trace_hle = getenv("WWHD_TRACE_HLE") != nullptr;  // log HLE calls and file accesses (macOS: --trace)
 namespace config {
 std::string game_dir = "game";
+std::string content_overlay;
 std::string save_dir = "save";
 std::string cache_dir;
 std::string code_dir;
