@@ -594,6 +594,15 @@ HLE(gx2, GX2CopySurface) {
     put_struct(p, arg(c, 3), kSurfaceWords);
     p.insert(p.end(), {arg(c, 4), arg(c, 5)});
     emit(OP_COPY_SURFACE, p.data(), (uint32)p.size());
+    // The copy is complete when GX2CopySurface returns: the game uses the result (and frees the
+    // surfaces) right away. agl's tile-mode conversion (027B5EEC) copies into a temporary surface,
+    // OSBlockMoves it back and frees it at once; executed later on the render thread, the copy
+    // wrote into the freed memory after the heap had reused it (intermittent boot crash). From the
+    // original project (5070881). Not for display lists (they run when called).
+    if (!t_rec.start) {
+        BlockingScope b;
+        render_sync();
+    }
 }
 HLE(gx2, GX2CopyColorBufferToScanBuffer) {
     std::vector<uint32> p;

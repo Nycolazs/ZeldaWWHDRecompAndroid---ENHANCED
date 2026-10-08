@@ -149,7 +149,8 @@ static Upload copy_tracked(SubmissionCopies& c, uint32_t addr, uint32_t size, Vk
     uint64_t key = (uint64_t)addr << 32 | size;
     auto it = c.map.find(key);
     if (it != c.map.end() && memw::unchanged_since(addr, size, it->second.gen)) {
-        bool verify = ((addr >> 6) + R.frame) % 16 == 0;
+        // the check reads the copy back: only from cached upload memory (uncached reads are ~100x slower)
+        bool verify = R.uploadCached && ((addr >> 6) + R.frame) % 16 == 0;
         if (!verify || memcmp(it->second.u.ptr, src, size) == 0) {
             reused += size;
             return it->second.u;
