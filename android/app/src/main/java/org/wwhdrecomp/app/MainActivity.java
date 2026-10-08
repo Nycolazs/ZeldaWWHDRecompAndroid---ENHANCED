@@ -67,7 +67,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         instance = this;
-        prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         firstStartDefaults();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
@@ -241,6 +241,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         startMotion();
         showGame();
         updateDrcDisplay();
+        checkControllerConnected();
         if (failedDriver != null)
             new GameDialog(this).title(R.string.opt_gpu_driver).message(getString(R.string.gpu_driver_failed, failedDriver))
                     .button(R.string.opt_ok, null).show();
@@ -466,11 +467,12 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         return false;
     }
 
-    // a controller in use went away: back to touch (controls shown, this device's sensors and rumble)
+    // a controller connected: play with it (on-screen controls hidden, its sensors and rumble), as
+    // on its first input. A controller in use went away: back to touch.
     private final android.hardware.input.InputManager.InputDeviceListener deviceListener =
             new android.hardware.input.InputManager.InputDeviceListener() {
-        @Override public void onInputDeviceAdded(int id) {}
-        @Override public void onInputDeviceChanged(int id) {}
+        @Override public void onInputDeviceAdded(int id) { controllerConnected(InputDevice.getDevice(id)); }
+        @Override public void onInputDeviceChanged(int id) { controllerConnected(InputDevice.getDevice(id)); }
         @Override public void onInputDeviceRemoved(int id) {
             if (lastController == null || lastController.getId() != id) return;
             inputSource(null);
@@ -705,6 +707,17 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         controllerUsed();
     }
 
+    private void controllerConnected(InputDevice d) {
+        if (d == null || d.isVirtual() || !InputMapper.isController(d) || !started) return;
+        if (lastController == null) inputSource(d);
+        controllerUsed();
+    }
+
+    // a controller already connected when the game starts or comes back to the front
+    private void checkControllerConnected() {
+        for (int id : InputDevice.getDeviceIds()) controllerConnected(InputDevice.getDevice(id));
+    }
+
     private void controllerUsed() {
         if (!autoHidden && prefs.getBoolean("auto_hide", true) && controls != null && controls.controlsVisible()) {
             autoHidden = true;
@@ -935,6 +948,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if (started) {
             Native.setPaused(false);
             startMotion();
+            checkControllerConnected();
         }
         hideSystemBars();
     }
@@ -1419,6 +1433,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     // ------------------------------------------------------------------ import / export
     // the game save (files/save) and the save states (files/states) to and from a folder the user picks
+    static final String PREFS = "settings";
+    // the menus' size, on top of fitting them to the screen (GameUi.fitted)
+    static final float[] MENU_SIZES = {0.7f, 0.8f, 0.9f, 1f, 1.15f, 1.3f};
+
     static final int PICK_EXPORT = 2, PICK_IMPORT = 3, PICK_DISC = 4;
     private boolean exportSave = true, exportStates = true;
 

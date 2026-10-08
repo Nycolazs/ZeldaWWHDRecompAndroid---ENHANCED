@@ -61,10 +61,10 @@ final class OptionsMenu extends Dialog {
     private String languageAtOpen;  // the game language when the menu opened: a change asks for a restart on closing
 
     OptionsMenu(MainActivity a) {
-        super(a, android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
+        super(GameUi.fitted(a), android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
         this.a = a;
         languageAtOpen = a.gameLanguage();
-        dp = a.getResources().getDisplayMetrics().density;
+        dp = getContext().getResources().getDisplayMetrics().density;  // fitted to the screen
         tab = lastTab;
     }
 
@@ -98,12 +98,13 @@ final class OptionsMenu extends Dialog {
             v.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
             v.setTextColor(Color.WHITE);
             v.setGravity(Gravity.CENTER);
-            v.setPadding(px(26), px(6), px(26), px(8));
+            v.setSingleLine(true);
+            v.setPadding(px(18), px(6), px(18), px(8));
             v.setFocusable(true);
             v.setOnClickListener(x -> selectTab(t));
             tabs[i] = v;
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-            lp.rightMargin = px(10);
+            lp.rightMargin = px(8);
             top.addView(v, lp);
         }
         View spacer = new View(getContext());
@@ -331,7 +332,7 @@ final class OptionsMenu extends Dialog {
             boolean on = i == t;
             GameUi.Palette pal = TAB_COLORS[i];
             tabs[i].setBackground(new GameUi.TabPlate(getContext(), on, pal));
-            tabs[i].setTextSize(on ? 26 : 21);
+            tabs[i].setTextSize(on ? 24 : 20);
             ((GameUi.OutlinedText) tabs[i]).outline = on ? pal.dark : pal.muted().dark;
         }
         fill();
@@ -522,6 +523,20 @@ final class OptionsMenu extends Dialog {
             if (MainActivity.LANGUAGES[langs[i]].equals(a.gameLanguage())) curLang = i;
         }
         choice(R.string.opt_language, R.string.opt_language_hint, names, curLang, i -> a.setGameLanguage(MainActivity.LANGUAGES[langs[i]]));
+        String[] sizes = new String[MainActivity.MENU_SIZES.length];
+        int curSize = 3;
+        for (int i = 0; i < sizes.length; i++) {
+            sizes[i] = Math.round(MainActivity.MENU_SIZES[i] * 100) + "%";
+            if (Math.abs(MainActivity.MENU_SIZES[i] - a.prefs.getFloat("menu_size", 1f)) < 0.01f) curSize = i;
+        }
+        choice(R.string.opt_menu_size, R.string.opt_menu_size_hint, sizes, curSize, i -> {
+            a.prefs.edit().putFloat("menu_size", MainActivity.MENU_SIZES[i]).apply();
+            // laid out again at the new size, where it was
+            rows.post(() -> {
+                dismiss();
+                new OptionsMenu(a).show();
+            });
+        });
     }
 
     private void mods() {
