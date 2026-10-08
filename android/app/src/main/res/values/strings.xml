@@ -3,6 +3,22 @@
     <string name="app_name">TLoZ:TWW HD Recompiled</string>
 
     <string name="setup_text">The game files were not found or don\'t match this build.\n\nThis app contains only the recompiled code built from your own copy of the game; it needs the extracted game files from the same dump. Extract them on a computer (see README.md: tools/wudextract.py), then copy the resulting folder (with code/, content/ and meta/ inside) to:\n\n%1$s\n\nFor example: adb push game /sdcard/Android/data/org.wwhdrecomp.app/files/\n\nProblem: %2$s</string>
+    <string name="opt_camera_stick">Camera stick</string>
+    <string name="opt_camera_stick_hint">A stick on the right that turns the camera (move it in Edit touch layout). Swiping the right side still works</string>
+    <string name="opt_hud">HUD positions</string>
+    <string name="opt_hud_hint">Move the hearts, rupees, buttons and the rest of the game\'s HUD</string>
+    <string name="opt_hud_note">Each part of the game\'s HUD can be moved left or right and up or down (in the game\'s 1280 x 720 picture). Close the menu to see the result; parts appear only where the game shows them.</string>
+    <string name="opt_hud_horizontal">Horizontal (− left, + right)</string>
+    <string name="opt_hud_vertical">Vertical (− up, + down)</string>
+    <string name="opt_hud_default">Default</string>
+    <string name="opt_hud_reset">Reset all HUD positions</string>
+    <string-array name="hud_parts">
+        <item>Hearts and magic</item>
+        <item>Rupees</item>
+        <item>Item buttons</item>
+        <item>Small keys</item>
+        <item>Wind compass and clock</item>
+    </string-array>
     <string name="opt_menu_size">Menu size</string>
     <string name="opt_menu_size_hint">The menus fit the screen on their own; this makes them smaller or larger.</string>
     <string name="setup_retry">Check again</string>

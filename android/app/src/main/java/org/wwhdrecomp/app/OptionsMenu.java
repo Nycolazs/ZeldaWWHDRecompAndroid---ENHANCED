@@ -453,7 +453,7 @@ final class OptionsMenu extends Dialog {
                    Native.setOption("drawdone_mode", i);
                });
         choice(R.string.opt_core_mode, R.string.opt_core_mode_hint, a.getResources().getStringArray(R.array.core_modes),
-               a.prefs.getInt("core_mode", 0), i -> {
+               a.prefs.getInt("core_mode", MainActivity.DEFAULT_CORE_MODE), i -> {
                    a.prefs.edit().putInt("core_mode", i).apply();
                    Native.setOption("core_mode", i);
                });
@@ -604,9 +604,15 @@ final class OptionsMenu extends Dialog {
             a.prefs.edit().putFloat("controls_scale", MainActivity.CONTROL_SIZES[i]).apply();
             a.applyControlsAppearance();
         });
+        submenu(R.string.opt_hud, R.string.opt_hud_hint, a.getString(a.hudMoved() ? R.string.opt_buttons_custom : R.string.opt_buttons_default),
+                () -> openPage(this::hudPage));
         submenu(R.string.opt_layout_edit, R.string.opt_layout_edit_hint, "", () -> {
             dismiss();
             a.editTouchLayout();
+        });
+        toggle(R.string.opt_camera_stick, R.string.opt_camera_stick_hint, a.prefs.getBoolean("camera_stick", true), on -> {
+            a.prefs.edit().putBoolean("camera_stick", on).apply();
+            a.applyControlsAppearance();
         });
         String[] sens = new String[MainActivity.CAMERA_SENSITIVITIES.length];
         int curSens = 2;
@@ -636,6 +642,31 @@ final class OptionsMenu extends Dialog {
         submenu(R.string.opt_buttons, R.string.opt_buttons_hint,
                 a.getString(a.inputMapper().isDefaultMap() ? R.string.opt_buttons_default : R.string.opt_buttons_custom),
                 () -> openPage(this::buttonsPage));
+    }
+
+    // the game's HUD parts moved by the player (aspect.cpp): a horizontal and a vertical offset each
+    private void hudPage() {
+        pageTitle(R.string.opt_hud);
+        note(a.getString(R.string.opt_hud_note));
+        String[] parts = a.getResources().getStringArray(R.array.hud_parts);
+        for (int p = 0; p < parts.length; p++) {
+            final int part = p;
+            for (int axis = 0; axis < 2; axis++) {
+                final int ax = axis;
+                int range = axis == 0 ? MainActivity.HUD_RANGE_X : MainActivity.HUD_RANGE_Y;
+                int n = 2 * range / MainActivity.HUD_STEP + 1;
+                String[] vals = new String[n];
+                for (int i = 0; i < n; i++) {
+                    int v = -range + i * MainActivity.HUD_STEP;
+                    vals[i] = v == 0 ? a.getString(R.string.opt_hud_default) : (v > 0 ? "+" : "") + v;
+                }
+                int cur = (a.hudOffset(part, axis) + range) / MainActivity.HUD_STEP;
+                if (axis == 1) indentNext = true;
+                choice(axis == 0 ? parts[p] : a.getString(R.string.opt_hud_vertical), axis == 0 ? a.getString(R.string.opt_hud_horizontal) : null,
+                        vals, Math.max(0, Math.min(n - 1, cur)), i -> a.setHudOffset(part, ax, -range + i * MainActivity.HUD_STEP));
+            }
+        }
+        submenu(R.string.opt_hud_reset, 0, "", () -> { a.resetHud(); fill(); });
     }
 
     // controller buttons: each Wii U button and the controller button that presses it
@@ -717,7 +748,11 @@ final class OptionsMenu extends Dialog {
     }
 
     private void choice(int label, int hint, String[] values, int cur, IntSetter set) {
-        LinearLayout r = row(label, hint);
+        choice(a.getString(label), hint != 0 ? a.getString(hint) : null, values, cur, set);
+    }
+
+    private void choice(String label, String hint, String[] values, int cur, IntSetter set) {
+        LinearLayout r = rowText(label, hint);
         int idx = Math.max(0, Math.min(values.length - 1, cur));
         TextView prev = arrow("◀"), next = arrow("▶");
         TextView value = new TextView(getContext());

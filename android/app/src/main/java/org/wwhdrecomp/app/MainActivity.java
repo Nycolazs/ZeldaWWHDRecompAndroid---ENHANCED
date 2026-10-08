@@ -492,7 +492,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         Native.setOption("render_aspect", prefs.getInt("render_aspect", 0));
         Native.setOption("fps_mode", prefs.getBoolean("fg_enabled", false) ? 0 : savedFpsMode());
         Native.setOption("drawdone_mode", prefs.getInt("drawdone_mode", 0));
-        Native.setOption("core_mode", prefs.getInt("core_mode", 0));
+        Native.setOption("core_mode", prefs.getInt("core_mode", MainActivity.DEFAULT_CORE_MODE));
+        for (int p = 0; p < HUD_PARTS; p++) {
+            Native.setOption("hud_" + p + "_x", hudOffset(p, 0));
+            Native.setOption("hud_" + p + "_y", hudOffset(p, 1));
+        }
         for (String k : new String[] {"inf_health", "inf_magic", "inf_ammo"}) Native.setOption(k, prefs.getBoolean(k, false) ? 1 : 0);
         for (String m : MODS) Native.setOption(m, prefs.getBoolean(m, false) ? 1 : 0);
         Native.setOption("mod_camera_speed", prefs.getInt("mod_camera_speed", 100));
@@ -507,7 +511,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         boolean visible = prefs.getBoolean("controls_visible", true) && !autoHidden;
         controls.setAppearance(visible, prefs.getFloat("controls_scale", 1f), prefs.getFloat("controls_opacity", 0.45f));
         controls.setTouchOptions(prefs.getFloat("camera_sensitivity", 1f), prefs.getBoolean("haptics", true),
-                prefs.getInt("combat_buttons", 0));
+                prefs.getInt("combat_buttons", 0), prefs.getBoolean("camera_stick", true));
         updateLayout();
     }
 
@@ -1434,6 +1438,32 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     // ------------------------------------------------------------------ import / export
     // the game save (files/save) and the save states (files/states) to and from a folder the user picks
     static final String PREFS = "settings";
+    // the game thread on the prime core, the renderer on the performance cores: on a Galaxy S20 FE
+    // (no ADPF) Outset went from 30 to 40-46 fps at 60 fps mode against letting the system place them
+    static final int DEFAULT_CORE_MODE = 3;
+    // the HUD positions (aspect.cpp): offsets in the game's 1280x720 layout pixels
+    static final int HUD_PARTS = 5, HUD_STEP = 20, HUD_RANGE_X = 400, HUD_RANGE_Y = 240;
+
+    int hudOffset(int part, int axis) { return prefs.getInt("hud_" + part + (axis == 0 ? "_x" : "_y"), 0); }
+
+    void setHudOffset(int part, int axis, int v) {
+        String k = "hud_" + part + (axis == 0 ? "_x" : "_y");
+        prefs.edit().putInt(k, v).apply();
+        Native.setOption(k, v);
+    }
+
+    boolean hudMoved() {
+        for (int p = 0; p < HUD_PARTS; p++)
+            if (hudOffset(p, 0) != 0 || hudOffset(p, 1) != 0) return true;
+        return false;
+    }
+
+    void resetHud() {
+        for (int p = 0; p < HUD_PARTS; p++) {
+            setHudOffset(p, 0, 0);
+            setHudOffset(p, 1, 0);
+        }
+    }
     // the menus' size, on top of fitting them to the screen (GameUi.fitted)
     static final float[] MENU_SIZES = {0.7f, 0.8f, 0.9f, 1f, 1.15f, 1.3f};
 

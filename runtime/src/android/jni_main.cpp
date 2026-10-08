@@ -473,6 +473,12 @@ JNI_FN(void, setOption)(JNIEnv* env, jclass, jstring name, jint value) {
     else if (n == "fps_mode") fps60::set_mode(value);
     else if (n == "drawdone_mode") gx2::set_drawdone_mode(value);
     else if (n == "core_mode") platform::set_core_mode(value);
+    // the player's HUD positions (aspect.cpp): "hud_<part>_x" / "hud_<part>_y", layout pixels
+    else if (n.size() > 6 && n.rfind("hud_", 0) == 0 && (n.back() == 'x' || n.back() == 'y')) {
+        int part = atoi(n.c_str() + 4);
+        bool y = n.back() == 'y';
+        aspect::set_hud_offset(part, y ? aspect::hud_offset(part, 0) : value, y ? value : aspect::hud_offset(part, 1));
+    }
     // cheats (mods/cheats.cpp): one-shot edits of the save data, and the infinite switches
     else if (n == "cheat") mods::request_cheat(value);
     else if (n == "inf_health") mods::set_infinite(mods::kInfHealth, value != 0);
