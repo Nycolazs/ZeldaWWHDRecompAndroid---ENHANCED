@@ -47,6 +47,9 @@ controllers, frame generation, building) is in [docs/android-port-readme.md](doc
 - Renderer fixes ported from the official Vulkan backend: invariant vertex positions for multipass
   depth tests, depth-compare samplers bound to depth surfaces, `GX2CopySurface` of depth and array
   slices, uniform blocks compared instead of trusted to write tracking.
+- From the original project's v0.5: **sun corona and lens flare** (the game's depth peeks read the GPU
+  depth buffer), **distance haze and bloom** with a proper mip chain (also removes black lines in
+  shadows), and the **Japanese version** (address map `tools/recomp/release_jpn.txt`).
 - Ambient occlusion modes, including **Off**.
 
 ### Camera

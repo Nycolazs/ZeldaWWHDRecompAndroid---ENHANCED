@@ -688,7 +688,10 @@ extern "C" void hook_025DF940(Cpu* c) {
             g_link = proc;
             trace_link(proc, 1.0f);
         }
-        if (actor_execute_fn(proc) == kDaPyExecute) g_link_steps++;
+        if (actor_execute_fn(proc) == kDaPyExecute) {
+            g_link = proc;  // also without true 60: the touch controls follow Link's procedure (touch_hud.cpp)
+            g_link_steps++;
+        }
         return;
     }
     float dt = classify(proc);
@@ -1274,7 +1277,9 @@ static bool hold_world() {
     static const bool every = getenv("WWHD_WORLD_EVERY_PASS") != nullptr;
     return interp::enabled() && interp::hold_pass() && !every;
 }
+namespace interp { void note_play_draw(); }  // interp.cpp: hybrid layout
 extern "C" void site_025B00B0(Cpu* c) {
+    interp::note_play_draw();
     if (hold_world()) c->r[3] = 1;
 }
 extern "C" void hook_025CB6D4(Cpu* c) {

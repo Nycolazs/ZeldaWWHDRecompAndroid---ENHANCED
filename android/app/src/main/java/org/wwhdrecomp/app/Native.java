@@ -29,7 +29,7 @@ final class Native {
     /** {modules done, modules in total (0 until known)} of the running compile. */
     static native long[] compileProgress();
     static native void compileCancel();
-    /** The game release in gameDir: "USA", "EUR", or "" (none or unknown). */
+    /** The game release in gameDir: "USA", "EUR", "JPN", or "" (none or unknown). */
     static native String gameRelease(String gameDir);
     /** The licenses of everything in the app, as text. */
     static native String licenses();
@@ -54,6 +54,8 @@ final class Native {
     static native void drcSurfaceChanged(Object surface);
     /** Screen rectangles in surface pixels: {x, y, w, h}. */
     static native void setLayout(float[] tv, float[] drc, boolean drcVisible);
+    /** a game menu is open (hybrid layout: the GamePad is shown full screen then) */
+    static native boolean menuOpen();
 
     static native void setPad(int buttons, float lx, float ly, float rx, float ry);
     /** Touch on the GamePad screen, 0..1 from the top left. */

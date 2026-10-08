@@ -138,7 +138,7 @@ JNI_FN(jstring, checkGame)(JNIEnv* env, jclass, jstring gameDir) {
     return nullptr;
 }
 
-// the game release in `gameDir`: "USA", "EUR", or "" (none or unknown)
+// the game release in `gameDir`: "USA", "EUR", "JPN", or "" (none or unknown)
 JNI_FN(jstring, gameRelease)(JNIEnv* env, jclass, jstring gameDir) {
     FILE* f = fopen((jstr(env, gameDir) + "/code/cking.rpx").c_str(), "rb");
     uint8_t h[0x1C] = {};
@@ -147,7 +147,7 @@ JNI_FN(jstring, gameRelease)(JNIEnv* env, jclass, jstring gameDir) {
         fclose(f);
     }
     uint32_t entry = (uint32_t)h[0x18] << 24 | h[0x19] << 16 | h[0x1A] << 8 | h[0x1B];
-    const char* r = entry == 0x028EA120u /* USA */ ? "USA" : release::known_entry(entry) ? "EUR" : "";
+    const char* r = release::name_of_entry(entry);
     return env->NewStringUTF(r);
 }
 
@@ -390,6 +390,9 @@ JNI_FN(void, setLayout)(JNIEnv* env, jclass, jfloatArray tv, jfloatArray drc, jb
     if (drc && env->GetArrayLength(drc) >= 4) env->GetFloatArrayRegion(drc, 0, 4, &d.x);
     gfx::set_layout(t, d, drcVisible);
 }
+
+namespace interp { bool menu_open(); }
+JNI_FN(jboolean, menuOpen)(JNIEnv*, jclass) { return interp::menu_open(); }  // hybrid layout (MainActivity)
 
 JNI_FN(void, setPad)(JNIEnv*, jclass, jint buttons, jfloat lx, jfloat ly, jfloat rx, jfloat ry) {
     input::set_pad((uint32_t)buttons, lx, ly, rx, ry);

@@ -3,6 +3,7 @@
 // and constants follow Cemu's padscore.
 #include "../runtime.h"
 #include "../input.h"
+#include "../release.h"
 
 namespace interp { bool repeat_input(); bool fresh_sticks(); }
 
@@ -67,7 +68,7 @@ HLE(padscore, KPADReadEx) {
     const bool repeat = interp::repeat_input();
     input::PadState p = repeat ? last_p : input::read();  // see interp.cpp
     if (repeat && interp::fresh_sticks()) {  // sticks every pass, buttons on full passes
-        input::PadState f = input::read();
+        input::PadState f = input::read(false);
         p.lx = f.lx; p.ly = f.ly; p.rx = f.rx; p.ry = f.ry;
     }
     last_p = p;
@@ -86,4 +87,18 @@ HLE(padscore, KPADReadEx) {
     st32(st + 0x80, 1);                   // cable
     if (err) st32(err, kKpadErrNone);
     ret(c, 1);
+}
+
+// The game's controller select screen (after the title) asks whether the picked controller is
+// connected: the port's controls follow the pick, so the game finds it at once (no "connect a Pro
+// Controller" wait) and the touch controls drive the controller the game listens to.
+extern "C" void f_026D43AC_orig(Cpu* c);
+extern "C" void f_026D43DC_orig(Cpu* c);
+extern "C" void hook_026D43AC(Cpu* c) {
+    if (c->lr == release::code(0x026D45B0) && input::pro_controller()) input::set_pro_controller(false);
+    f_026D43AC_orig(c);
+}
+extern "C" void hook_026D43DC(Cpu* c) {
+    if (c->lr == release::code(0x026D45E0) && !input::pro_controller()) input::set_pro_controller(true);
+    f_026D43DC_orig(c);
 }

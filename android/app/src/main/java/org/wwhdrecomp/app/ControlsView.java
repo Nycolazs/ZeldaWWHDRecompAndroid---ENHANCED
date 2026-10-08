@@ -467,11 +467,22 @@ final class ControlsView extends View {
         return !hudKnown() || hudFlag(HUD_HAS_SWORD);  // the combat moves need a sword
     }
 
+    // the GamePad's touch menus fill the screen (hybrid layout): only A, B and pause stay
+    private boolean drcMenu;
+
+    void setDrcMenu(boolean on) {
+        if (on == drcMenu) return;
+        drcMenu = on;
+        if (on) for (Ctl c : controls) if (!shown(c)) release(c);
+        invalidate();
+    }
+
     private boolean shown(Ctl c) {
         if (c.removed) return false;
         if (editMode) return true;
         if (c.kind == K_MENU || c.kind == K_EDIT) return menuShown;
         if (!controlsVisible) return false;
+        if (drcMenu && !(c.id.equals("a") || c.id.equals("b") || c.id.equals("pause"))) return false;
         if (c.kind == K_MACRO) return combatShown();
         // D-pad items Link doesn't have yet are hidden: the Wind Waker (up), the cannon (left: it fires
         // bombs) and the salvage hook (right)
@@ -799,7 +810,7 @@ final class ControlsView extends View {
                     touchDrc(true, x, y);
                 } else if (!controlsVisible) {
                     break;
-                } else if (x < getWidth() * 0.45f && !byId.get("stick").removed) {
+                } else if (x < getWidth() * 0.45f && !byId.get("stick").removed && !drcMenu) {
                     if (stickPointer < 0) {
                         stickPointer = id;
                         stickOx = x;

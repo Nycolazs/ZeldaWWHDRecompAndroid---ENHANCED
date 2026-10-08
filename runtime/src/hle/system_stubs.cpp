@@ -103,15 +103,17 @@ HLE(vpad, VPADRead) {
     // frame interpolation: the read after a logic pass repeats the last sample (interp.cpp)
     static input::PadState last_p;
     const bool repeat = interp::repeat_input();
-    input::PadState p = repeat ? last_p : input::read();
+    // in Pro Controller mode the buttons go to KPADReadEx: don't spend its short taps here
+    input::PadState p = repeat ? last_p : input::read(!input::pro_controller());
     if (repeat && interp::fresh_sticks()) {  // sticks every pass, buttons on full passes
-        input::PadState f = input::read();
+        input::PadState f = input::read(false);
         p.lx = f.lx; p.ly = f.ly; p.rx = f.rx; p.ry = f.ry;
     }
     last_p = p;
-    if (input::pro_controller()) {  // GamePad on the table: screen and touch only
+    if (input::pro_controller()) {  // GamePad on the table: screen only (stray touches make the game buzz and lock the pause menu)
         p.buttons = 0;
         p.lx = p.ly = p.rx = p.ry = 0;
+        p.touch = false;
     }
     uint32_t hold = p.buttons;
     auto stick_dirs = [&](float x, float y, uint32_t up, uint32_t down, uint32_t left, uint32_t right) {

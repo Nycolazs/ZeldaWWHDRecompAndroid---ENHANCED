@@ -77,6 +77,8 @@ static std::atomic<bool> g_on{[] { const char* e = getenv("WWHD_INTERP"); return
 // behaves exactly like 30 fps: no stale halfway history is consumed. The following real hold pass
 // repopulates the interpolation histories before halfway drawing resumes.
 static std::atomic<bool> g_exact_catchup{false};
+// 40 fps with a menu open (and a moment after it closes): plain 30 fps passes, see menu30_update
+static std::atomic<bool> g_menu30{false};
 static std::atomic<bool> g_cadence_reset{true};
 static uint64_t g_next_logic_due = 0, g_last_output_at = 0;
 static double g_output_period = (double)timebase::kTicksPerSec / 60.0;
@@ -84,7 +86,9 @@ bool interp_on() { return g_on.load(std::memory_order_relaxed); }
 // the 60 Hz pass structure below is used by both 60 fps modes: interpolation (30 Hz logic) and
 // true 60 (true60.cpp: 60 Hz processes also execute on the in-between "hold" passes)
 static bool configured_enabled() { return interp_on() || true60::enabled(); }
-bool enabled() { return configured_enabled() && !g_exact_catchup.load(std::memory_order_relaxed); }
+bool enabled() {
+    return configured_enabled() && !g_exact_catchup.load(std::memory_order_relaxed) && !g_menu30.load(std::memory_order_relaxed);
+}
 void set_enabled(bool v) {
     if (v) true60::set_enabled(false);
     g_on = v;
@@ -117,7 +121,7 @@ void set_mode40(bool v) {
 // vsync); 40 fps: the game's interval 2 (30 fps at 60 Hz) is 3 vsyncs of the 120 Hz clock
 // A catch-up pass temporarily bypasses interpolation hooks, but still presents at the fast cadence.
 uint32_t effective_swap_interval(uint32_t game) {
-    if (mode40()) return std::max<uint32_t>(1, (game * 3 + 1) / 2);
+    if (mode40()) return g_menu30.load(std::memory_order_relaxed) ? game * 2 : std::max<uint32_t>(1, (game * 3 + 1) / 2);
     return configured_enabled() ? std::max<uint32_t>(1, game / 2) : game;
 }
 
@@ -626,8 +630,43 @@ void ss_reset() {
 
 namespace mods { void cheats_service(); }  // mods/cheats.cpp
 
+// 40 fps: the HD menus' closing animation on the GamePad (fade of the dimmed screen) gets stuck when
+// the frames per logic step alternate 1, 1, 2 (the GamePad stays half dimmed and every menu refuses
+// to open: error sound); at 30 and 60 fps the ratio is constant. The same happens on the way from
+// the file select into the game. While a menu is open or no game is in play, and for 2 s after,
+// the passes are plain 30 fps ones (swap interval 4 of the 120 Hz clock).
+static std::atomic<bool> g_menu_open{false};
+static uint64_t g_play_draw_step = 0;
+namespace interp {
+// the hybrid layout shows the GamePad: a game menu is open (dMenu_flag), or no game is being played
+// (title, file select: the play scene's world step, true60.cpp site_025B00B0, has not run for 15 steps)
+bool menu_open() { return g_menu_open.load(std::memory_order_relaxed); }
+void note_play_draw() { g_play_draw_step = g_logic_steps; }
+}
+static void menu30_update() {
+    using namespace interp;
+    static uint64_t until = 0;
+    const bool menu = ld8(release::data(0x101EA069)) != 0;  // dMenu_flag (025986BC)
+    const bool gamepad = menu || g_logic_steps > g_play_draw_step + 15;
+    if (gamepad != g_menu_open.load(std::memory_order_relaxed)) {
+        g_menu_open.store(gamepad, std::memory_order_relaxed);
+        LOG("[interp] %s", gamepad ? (menu ? "menu open" : "no game in play") : "game in play");
+    }
+    bool on = false;
+    if (mode40()) {
+        if (gamepad) until = g_logic_steps + 60;  // also the move into the game (file select)
+        on = g_logic_steps < until;
+    }
+    if (on != g_menu30.load(std::memory_order_relaxed)) {
+        g_menu30.store(on, std::memory_order_relaxed);
+        ss_reset();  // no blending across the switch; the next 40 fps cycle starts with a hold pass
+        LOG("[interp] 40 fps: %s", on ? "menu open, 30 fps passes" : "menu closed, 40 fps again");
+    }
+}
+
 extern "C" void hook_0203593C(Cpu* c) {
     using namespace interp;
+    menu30_update();
     fx_pass_start();
     ss::service(c);  // save states: exact values are back in guest memory, all other threads idle
     mods::cheats_service();
@@ -660,6 +699,7 @@ extern "C" void hook_0203593C(Cpu* c) {
 
     true60::new_pass();
     static int phase40 = 0;  // 40 fps: 0 hold pass, 1..3 logic passes at 0.75 / 0.5 / 0.25
+    if (g_menu30.load(std::memory_order_relaxed)) phase40 = 0;
     if (mode40()) g_hold_next = phase40 == 0;
     else phase40 = 0;
     const bool exact_catchup = interp_on() && g_hold_next && logic_is_due_before_next_output(pass_at);

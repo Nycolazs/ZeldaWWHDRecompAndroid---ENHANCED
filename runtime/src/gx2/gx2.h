@@ -35,6 +35,8 @@ void swap();                     // present the TV scan buffer
 void set_frame_aspect(float a);  // aspect ratio of the TV picture from the next frame on (aspect.cpp)
 // a render target of this guest size is widened (taller) for the aspect ratio: by kx, ky
 bool target_aspect_factors(uint32_t w, uint32_t h, float& kx, float& ky);
+// depth peeks (peekz.cpp): x, y (640x480 screen space) and the guest address of the answer, per point
+void peek_z(const uint32_t* cells, uint32_t n);
 uint64_t frames_completed();     // swaps whose GPU work has finished
 uint64_t frames_submitted();     // swaps the render thread has submitted
 void with_autorelease_pool(void (*fn)());  // render thread: drain Objective-C temporaries per batch

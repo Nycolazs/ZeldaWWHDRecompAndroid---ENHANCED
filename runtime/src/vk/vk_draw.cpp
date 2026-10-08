@@ -1714,6 +1714,7 @@ static bool ensure_pass(Surface* const* colors, const uint32_t* colorSlices, Sur
     }
     R.passDepth = depth;
     R.passDepthSlice = depthSlice;
+    if (depth && depth->width == 1280 && depth->height == 720) R.mainDepthAddr = depth->addr;
     R.passWidth = w;
     R.passHeight = h;
     return true;

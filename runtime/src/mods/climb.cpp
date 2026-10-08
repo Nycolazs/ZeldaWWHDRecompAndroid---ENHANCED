@@ -108,7 +108,7 @@ bool debug() {
     return d;
 }
 
-bool b_held() { return (input::read().buttons & input::kB) != 0; }
+bool b_held() { return (input::read(false).buttons & input::kB) != 0; }
 }  // namespace
 
 namespace mods {

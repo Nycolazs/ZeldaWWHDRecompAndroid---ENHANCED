@@ -76,6 +76,10 @@ struct Voice {
 
 std::mutex g_ax_mutex;
 Voice g_voices[kMaxVoices];
+// GamePad mix per voice (device 1, index 0), left and right: played instead of the TV mix when that
+// is silent, as when the game moves to the GamePad (off-TV play), which has no output of its own
+// here. Kept outside Voice, which save states store as is.
+ChMix g_drc_mix[kMaxVoices][2][kBuses];
 uint32_t g_vpb_base = 0;
 uint32_t g_app_frame_cb[64] = {};
 uint32_t g_final_mix_cb[3] = {};
@@ -267,9 +271,18 @@ void process_voices() {
             for (int ch = 0; ch < 2; ch++) tv += v.tv[ch][0].vol / 32768.0f;
             for (int i = 0; i < kSamples; i++) g_sfx_energy += std::fabs(buf[i] / 256.0f) * tv;
         }
+        bool tv_silent = true;
         for (int c = 0; c < kTvChannels; c++)
             for (int b = 0; b < kBuses; b++)
-                if (v.tv[c][b].vol || v.tv[c][b].delta) mix_into(buf, g_tv_bus[b][c], v.tv[c][b]);
+                if (v.tv[c][b].vol || v.tv[c][b].delta) {
+                    mix_into(buf, g_tv_bus[b][c], v.tv[c][b]);
+                    tv_silent = false;
+                }
+        auto& drc = g_drc_mix[&v - g_voices];
+        if (tv_silent)
+            for (int c = 0; c < 2; c++)
+                for (int b = 0; b < kBuses; b++)
+                    if (drc[c][b].vol || drc[c][b].delta) mix_into(buf, g_tv_bus[b][c], drc[c][b]);
         if (!v.state) st32(v.vpb + kVpbState, 0);
         st32(v.vpb + kVpbOffsets + 0xC, v.cur_abs - base_units(v.format, v.samples));
     }
@@ -676,6 +689,7 @@ HLE(snd_core, AXAcquireVoiceEx) {
         if (v.acquired) continue;
         uint32_t vpb = v.vpb;
         v = Voice{};
+        memset(g_drc_mix[&v - g_voices], 0, sizeof g_drc_mix[0]);
         v.vpb = vpb;
         v.acquired = true;
         st32(vpb + kVpbState, 0);
@@ -829,6 +843,13 @@ HLE(snd_core, AXSetVoiceDeviceMix) {
                 uint32_t e = mix + 4 * (ch * kBuses + b);
                 v->tv[ch][b].vol = ld16(e);
                 v->tv[ch][b].delta = (int16_t)ld16(e + 2);
+            }
+    if (dev == 1 && idx == 0)
+        for (int ch = 0; ch < 2; ch++)
+            for (int b = 0; b < kBuses; b++) {
+                uint32_t e = mix + 4 * (ch * kBuses + b);
+                g_drc_mix[v - g_voices][ch][b].vol = ld16(e);
+                g_drc_mix[v - g_voices][ch][b].delta = (int16_t)ld16(e + 2);
             }
     ret(c, 0);
 }

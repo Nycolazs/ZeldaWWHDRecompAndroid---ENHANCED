@@ -53,7 +53,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private static boolean libraryLoaded, started;
 
     // screen layouts
-    static final int LAYOUT_INSET = 0, LAYOUT_SIDE = 1, LAYOUT_TV = 2, LAYOUT_DRC_LARGE = 3;
+    static final int LAYOUT_INSET = 0, LAYOUT_SIDE = 1, LAYOUT_TV = 2, LAYOUT_DRC_LARGE = 3, LAYOUT_HYBRID = 4;
     private static final float TV_ASPECT = 16f / 9f, DRC_ASPECT = 854f / 480f;
 
     SharedPreferences prefs;
@@ -68,6 +68,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         super.onCreate(state);
         instance = this;
         prefs = getSharedPreferences("settings", MODE_PRIVATE);
+        firstStartDefaults();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         if (!libraryLoaded) {
@@ -88,12 +89,16 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     // ------------------------------------------------------------------ game language
     // The console language the game sees (runtime: UCReadSysConfig), from the release's languages;
     // by default the device's, else English. Applies at the next start.
-    static final String[] LANGUAGES = {"en", "fr", "de", "it", "es"};
-    static final String[] LANGUAGE_NAMES = {"English", "Français", "Deutsch", "Italiano", "Español"};
+    static final String[] LANGUAGES = {"en", "fr", "de", "it", "es", "ja"};
+    static final String[] LANGUAGE_NAMES = {"English", "Français", "Deutsch", "Italiano", "Español", "日本語"};
 
-    /** the release's languages (indexes into LANGUAGES): USA English, French, Spanish; EUR all five */
+    /** the release's languages (indexes into LANGUAGES): USA English, French, Spanish; EUR the first
+     *  five; JPN Japanese */
     int[] gameLanguages() {
-        return "EUR".equals(Native.gameRelease(gameDir())) ? new int[] {0, 1, 2, 3, 4} : new int[] {0, 1, 4};
+        String r = Native.gameRelease(gameDir());
+        if ("EUR".equals(r)) return new int[] {0, 1, 2, 3, 4};
+        if ("JPN".equals(r)) return new int[] {5};
+        return new int[] {0, 1, 4};
     }
 
     String gameLanguage() {
@@ -441,6 +446,41 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
     }
 
+    // first start without a controller attached: set up for a single touch screen (GamePad controls,
+    // the hybrid layout: touch menus full screen); with a controller the usual defaults stay
+    private void firstStartDefaults() {
+        if (prefs.getBoolean("defaults_set", false)) return;
+        SharedPreferences.Editor e = prefs.edit().putBoolean("defaults_set", true);
+        if (!prefs.contains("layout") && !controllerAttached()) {
+            e.putInt("layout", LAYOUT_HYBRID);
+            if (!prefs.contains("pro_controller")) e.putBoolean("pro_controller", false);
+        }
+        e.apply();
+    }
+
+    private static boolean controllerAttached() {
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice d = InputDevice.getDevice(id);
+            if (d != null && !d.isVirtual() && InputMapper.isController(d)) return true;
+        }
+        return false;
+    }
+
+    // a controller in use went away: back to touch (controls shown, this device's sensors and rumble)
+    private final android.hardware.input.InputManager.InputDeviceListener deviceListener =
+            new android.hardware.input.InputManager.InputDeviceListener() {
+        @Override public void onInputDeviceAdded(int id) {}
+        @Override public void onInputDeviceChanged(int id) {}
+        @Override public void onInputDeviceRemoved(int id) {
+            if (lastController == null || lastController.getId() != id) return;
+            inputSource(null);
+            if (autoHidden) {
+                autoHidden = false;
+                applyControlsAppearance();
+            }
+        }
+    };
+
     private void applyOptions() {
         Native.setOption("ao_mode", prefs.getInt("ao_mode", Native.getOption("ao_mode")));
         Native.setOption("ao_hires", prefs.getBoolean("ao_hires", Native.getOption("ao_hires") != 0) ? 1 : 0);
@@ -520,13 +560,37 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         drcDisplay.setWanted(started && resumed && drcOnSecondDisplay());
     }
 
+    // hybrid layout: the TV full screen, the GamePad full screen while a game menu is open (touch menus
+    // on a single screen). With the Pro Controller the layout is TV only (the GamePad is set aside).
+    // Polled, as the game opens and closes menus and its controller select screen switches the controls
+    // (hle/padscore.cpp).
+    private boolean hybridMenu, layoutPro;
+    private final Runnable layoutPoll = new Runnable() {
+        @Override public void run() {
+            if (controls == null) return;
+            boolean pro = Native.getOption("pro_controller") != 0;
+            boolean hybrid = !pro && prefs.getInt("layout", LAYOUT_INSET) == LAYOUT_HYBRID;
+            boolean m = hybrid && Native.menuOpen();
+            if (pro != layoutPro || m != hybridMenu) {
+                hybridMenu = m;
+                updateLayout();
+            } else {
+                controls.postDelayed(this, 100);
+            }
+        }
+    };
+
     void updateLayout() {
         if (surfaceW == 0 || surfaceH == 0 || controls == null) return;
         float W = surfaceW, H = surfaceH;
         RectF full = new RectF(0, 0, W, H);
         RectF tv, drc;
         int layout = prefs.getInt("layout", LAYOUT_INSET);
+        layoutPro = Native.getOption("pro_controller") != 0;
         if (drcDisplay != null && drcDisplay.active()) layout = LAYOUT_TV;  // the GamePad has its own display
+        else if (layoutPro) layout = LAYOUT_TV;  // Pro Controller: the GamePad is not played on
+        controls.removeCallbacks(layoutPoll);
+        controls.postDelayed(layoutPoll, 100);
         // the inset sits between the shoulder buttons, sized to leave them free
         float insetW = Math.min(W * 0.3f, W - 2 * (Math.min(W, H) / 7f * 3.6f));
         RectF inset = new RectF((W - insetW) / 2, 0, (W + insetW) / 2, insetW / DRC_ASPECT);
@@ -543,6 +607,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                 drc = full;
                 tv = inset;
                 break;
+            case LAYOUT_HYBRID:  // the GamePad is drawn over the TV
+                tv = full;
+                drc = hybridMenu ? full : null;
+                break;
             default:
                 tv = full;
                 drc = inset;
@@ -551,6 +619,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         Native.setLayout(new float[] {tv.left, tv.top, tv.width(), tv.height()},
                 drc == null ? null : new float[] {drc.left, drc.top, drc.width(), drc.height()}, drc != null);
         controls.setDrcRect(drc == null ? null : fit(drc, DRC_ASPECT));
+        controls.setDrcMenu(layout == LAYOUT_HYBRID && hybridMenu);
         controls.setTvRect(fit(tv, TV_ASPECT));
         controls.setClimbHud(prefs.getBoolean("mod_climb", false));
         controls.setPerfHud(prefs.getBoolean("perf_hud", false));
@@ -848,8 +917,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     protected void onPause() {
         super.onPause();
         resumed = false;
+        ((android.hardware.input.InputManager) getSystemService(INPUT_SERVICE)).unregisterInputDeviceListener(deviceListener);
         updateDrcDisplay();
         if (started) Native.setPaused(true);
+        // the game's controller select screen may have switched the controls (hle/padscore.cpp)
+        if (started) prefs.edit().putBoolean("pro_controller", Native.getOption("pro_controller") != 0).apply();
         if (motion != null) motion.stop();
         if (rumble != null) rumble.stop();
     }
@@ -858,6 +930,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     protected void onResume() {
         super.onResume();
         resumed = true;
+        ((android.hardware.input.InputManager) getSystemService(INPUT_SERVICE)).registerInputDeviceListener(deviceListener, null);
         updateDrcDisplay();
         if (started) {
             Native.setPaused(false);
