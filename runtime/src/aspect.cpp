@@ -322,10 +322,19 @@ thread_local bool t_tv = false;     // ... and it is a TV layout
 }  // namespace
 }  // namespace aspect
 
+// the game's "Skip" prompt (T_Skip_00): its layout runs, hidden until + is pressed once, for as long
+// as a skippable scene plays (the prologue, story cutscenes) and not otherwise
+static std::atomic<uint64_t> g_skip_swap{0};
+bool aspect::skippable_scene() {
+    uint64_t s = g_skip_swap.load(std::memory_order_relaxed);
+    return s && g_swaps - s <= 8;
+}
+
 // Pane::CalculateMtx(this, DrawInfo&, bool parentDirty)
 extern "C" void hook_028766CC(Cpu* c) {
     using namespace aspect;
     uint32_t pane = c->r[3];
+    if (ld32(pane + kPaneName) == 0x545F536B /* "T_Sk" */ && name_is(pane, "T_Skip_00")) g_skip_swap.store(g_swaps ? g_swaps : 1, std::memory_order_relaxed);
     uint32_t parent = ld32(pane + kPaneParent);
     float kx, ky;
     factors(g_game, kx, ky);

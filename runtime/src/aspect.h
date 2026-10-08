@@ -24,5 +24,6 @@ void layout_root_target(uint32_t root, bool tv);   // render thread (OP_LAYOUT_R
 enum HudPart : int { kHudHearts = 0, kHudRupees, kHudButtons, kHudKeys, kHudCompass, kHudParts };
 void set_hud_offset(int part, int dx, int dy);
 int hud_offset(int part, int axis);
+bool skippable_scene();  // a scene the game lets + skip is playing (its Skip prompt's layout runs)
 void ss_reset();  // save state loaded: every layout recomputes its matrices once
 }  // namespace aspect

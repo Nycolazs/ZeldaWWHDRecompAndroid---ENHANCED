@@ -31,13 +31,14 @@ final class ControlsView extends View {
         void onLayoutSaved(String layout);
     }
 
-    private static final int K_STICK = 0, K_BUTTON = 1, K_MACRO = 3, K_MENU = 4, K_EDIT = 5, K_CAMSTICK = 6;
+    private static final int K_STICK = 0, K_BUTTON = 1, K_MACRO = 3, K_MENU = 4, K_EDIT = 5, K_CAMSTICK = 6, K_SKIP = 7;
     // combat moves (K_MACRO controls' bit field)
     private static final int M_JUMP = 1, M_VERTICAL = 2, M_SPIN = 3, M_DODGE = 4;
 
     // game state from Native.hudState(): {flags, A action, B action, ZR action, X item, Y item, R item}
     static final int HUD_KNOWN = 1, HUD_ON_BOAT = 2, HUD_SWORD_OUT = 4, HUD_TARGETING = 8, HUD_FIRST_PERSON = 16,
-            HUD_HAS_SWORD = 32, HUD_HAS_SHIELD = 64, HUD_HAS_BATON = 128, HUD_HAS_GRAPPLE = 256, HUD_HAS_BOMBS = 512;
+            HUD_HAS_SWORD = 32, HUD_HAS_SHIELD = 64, HUD_HAS_BATON = 128, HUD_HAS_GRAPPLE = 256, HUD_HAS_BOMBS = 512,
+            HUD_CUTSCENE = 1024;  // a scene the game lets + skip: only the Skip button shows, a tap elsewhere is A
     private static final int HUD_FLAGS = 0, HUD_A = 1, HUD_B = 2, HUD_ZR = 3, HUD_X = 4, HUD_Y = 5, HUD_R = 6;
 
     private static final class Ctl {
@@ -68,7 +69,7 @@ final class ControlsView extends View {
         }
         boolean custom() { return !Float.isNaN(fx); }
         boolean removed;  // taken off the screen in the layout editor
-        boolean removable() { return kind != K_MENU && kind != K_EDIT; }  // the way back to the menus stays
+        boolean removable() { return kind != K_MENU && kind != K_EDIT && kind != K_SKIP; }  // the way back to the menus stays
     }
 
     private final Listener listener;
@@ -123,6 +124,8 @@ final class ControlsView extends View {
         add(new Ctl("spin", K_MACRO, M_SPIN, O, "⟳", "combat_spin_attack", 1, -4.9f, 1, -2.1f, 0.95f));
         add(new Ctl("dodge", K_MACRO, M_DODGE, O, "⇆", "combat_dodge", 1, -4.4f, 1, -0.9f, 0.95f));
         add(new Ctl("pause", K_BUTTON, Native.PLUS, B, "❚❚", "btn_pause", 0.5f, -0.9f, 1, -0.5f, 0.75f));
+        // during skippable scenes the only control: + twice (the game asks "Skip?" on the first)
+        add(new Ctl("skip", K_SKIP, Native.PLUS, B, "", "", 1, -1.6f, 1, -0.9f, 1.0f));
         add(new Ctl("menu", K_MENU, 0, B, "≡", "btn_menu", 0.5f, 0, 1, -0.5f, 0.75f));
         add(new Ctl("edit", K_EDIT, 0, B, "✎", "btn_layout_edit", 0.5f, 0.9f, 1, -0.5f, 0.75f));
     }
@@ -482,9 +485,13 @@ final class ControlsView extends View {
         invalidate();
     }
 
+    private boolean cutscene() { return hudFlag(HUD_CUTSCENE) && !editMode; }
+
     private boolean shown(Ctl c) {
         if (c.removed) return false;
         if (c.kind == K_CAMSTICK && !cameraStick) return false;
+        if (cutscene()) return (controlsVisible && c.kind == K_SKIP) || (c.kind == K_MENU && menuShown);
+        if (c.kind == K_SKIP) return editMode;
         if (editMode) return true;
         if (c.kind == K_MENU || c.kind == K_EDIT) return menuShown;
         if (!controlsVisible) return false;
@@ -633,6 +640,14 @@ final class ControlsView extends View {
         macroSy = s[4] / 1000f;
         changed();
         postDelayed(macroTick, s[0]);
+    }
+
+    // a fixed button sequence (steps as in startMacro), if none runs
+    private void startSequence(int[][] steps) {
+        if (macro != null) return;
+        macro = steps;
+        macroStep = 0;
+        applyMacroStep();
     }
 
     private void startMacro(int move) {
@@ -818,6 +833,14 @@ final class ControlsView extends View {
                         }
                         return true;
                     }
+                    if (c.kind == K_SKIP) {
+                        buzz();
+                        startSequence(new int[][] {{120, Native.PLUS, 0, 0, 0}, {450, 0, 0, 0, 0}, {120, Native.PLUS, 0, 0, 0}, {60, 0, 0, 0, 0}});
+                        c.pressed = true;
+                        pointers.put(id, c);
+                        changed = true;
+                        break;
+                    }
                     if (c.kind == K_CAMSTICK) {
                         if (camStickPointer < 0) {
                             camStickPointer = id;
@@ -836,6 +859,10 @@ final class ControlsView extends View {
                         buzz();
                     }
                     changed = true;
+                } else if (cutscene() && controlsVisible) {
+                    // a tap anywhere else during a scene: A (advances its text)
+                    startSequence(new int[][] {{110, Native.A, 0, 0, 0}});
+                    break;
                 } else if (drcPointer < 0 && inDrc(x, y)) {
                     drcPointer = id;
                     touchDrc(true, x, y);
@@ -1142,6 +1169,7 @@ final class ControlsView extends View {
             switch (c.kind) {
                 case K_STICK: drawStick(canvas, c, a); break;
                 case K_CAMSTICK: drawCamStick(canvas, c, a); break;
+                case K_SKIP: drawSkip(canvas, c, editMode ? a : Math.max(a, 200)); break;
                 default: drawButton(canvas, c, a); break;
             }
             if (editMode && c == editSel) {
@@ -1208,6 +1236,24 @@ final class ControlsView extends View {
         }
         float kx = bx + stickX * c.r * 0.8f, ky = by - stickY * c.r * 0.8f;
         icons.draw(canvas, "stick_knob", TouchIcons.BONE, "", kx, ky, c.r * 0.42f, alpha, false);
+    }
+
+    // a rounded "Skip ▶▶" plate
+    private void drawSkip(Canvas canvas, Ctl c, int a) {
+        float w = c.r * 2.6f, h = c.r * 1.05f;
+        tmp.set(c.cx - w / 2, c.cy - h / 2, c.cx + w / 2, c.cy + h / 2);
+        fill.setColor(c.pressed ? 0xFF2E7DB8 : 0xFF1B4F72);
+        fill.setAlpha(a * 3 / 4);
+        canvas.drawRoundRect(tmp, h / 2, h / 2, fill);
+        stroke.setColor(0xFFFFFFFF);
+        stroke.setAlpha(a);
+        canvas.drawRoundRect(tmp, h / 2, h / 2, stroke);
+        text.setColor(0xFFFFFFFF);
+        text.setAlpha(a);
+        float ts = text.getTextSize();
+        text.setTextSize(h * 0.42f);
+        canvas.drawText(getContext().getString(R.string.touch_skip) + "  ▶▶", c.cx, c.cy + h * 0.15f, text);
+        text.setTextSize(ts);
     }
 
     private void drawCamStick(Canvas canvas, Ctl c, int a) {

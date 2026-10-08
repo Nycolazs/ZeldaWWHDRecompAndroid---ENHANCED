@@ -3,6 +3,7 @@
     <string name="app_name">TLoZ:TWW HD Recompiled</string>
 
     <string name="setup_text">The game files were not found or don\'t match this build.\n\nThis app contains only the recompiled code built from your own copy of the game; it needs the extracted game files from the same dump. Extract them on a computer (see README.md: tools/wudextract.py), then copy the resulting folder (with code/, content/ and meta/ inside) to:\n\n%1$s\n\nFor example: adb push game /sdcard/Android/data/org.wwhdrecomp.app/files/\n\nProblem: %2$s</string>
+    <string name="touch_skip">Skip</string>
     <string name="opt_camera_stick">Camera stick</string>
     <string name="opt_camera_stick_hint">A stick on the right that turns the camera (move it in Edit touch layout). Swiping the right side still works</string>
     <string name="opt_hud">HUD positions</string>
