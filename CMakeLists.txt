@@ -66,6 +66,16 @@ else()
 endif()
 target_compile_options(cemu_latte PRIVATE -w -O2)
 
+# ---- zstd's decoder (BSD-3-Clause): Wii U archives (.wua) are zstd-compressed (runtime/src/disc/wua.cpp)
+include(FetchContent)
+FetchContent_Declare(zstd GIT_REPOSITORY https://github.com/facebook/zstd.git GIT_TAG v1.5.6 GIT_SHALLOW TRUE SOURCE_SUBDIR none)
+FetchContent_MakeAvailable(zstd)
+file(GLOB ZSTD_SOURCES ${zstd_SOURCE_DIR}/lib/common/*.c ${zstd_SOURCE_DIR}/lib/decompress/*.c)
+add_library(zstd_dec STATIC ${ZSTD_SOURCES})
+target_include_directories(zstd_dec PUBLIC ${zstd_SOURCE_DIR}/lib)
+target_compile_definitions(zstd_dec PRIVATE ZSTD_DISABLE_ASM ZSTD_LEGACY_SUPPORT=0 ZSTD_NO_TRACE)
+target_compile_options(zstd_dec PRIVATE -O2 -w)
+
 # ---- runtime sources shared by both platforms
 # GX2 and HLE sources are compiled into the final binary (not a static library) so their strong
 # definitions replace the generated weak import stubs.
@@ -93,7 +103,7 @@ if(APPLE)
   target_include_directories(wwhd PRIVATE runtime/include runtime/src runtime/src/gx2)
   target_compile_options(wwhd PRIVATE -Wall -Wno-unused-function -Wno-unused-variable -ffp-contract=off)
   find_package(ZLIB REQUIRED)
-  target_link_libraries(wwhd PRIVATE gamecode cemu_latte ZLIB::ZLIB
+  target_link_libraries(wwhd PRIVATE gamecode cemu_latte zstd_dec ZLIB::ZLIB
     "-framework Metal" "-framework QuartzCore" "-framework AppKit" "-framework Foundation" "-framework ImageIO" "-framework UniformTypeIdentifiers" "-framework GameController" "-framework Carbon" "-framework AudioToolbox" "-framework CoreAudio" compression)
 
   add_executable(shadertest runtime/tools/shadertest.cpp runtime/src/gx2/gx2_shader_regs.cpp)
@@ -148,7 +158,7 @@ elseif(ANDROID)
   # 16 KiB page devices (Android 15+); -Bsymbolic: calls between the recompiled functions bind
   # directly instead of through the PLT (their names stay exported for backtraces)
   target_link_options(wwhd PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,-Bsymbolic")
-  target_link_libraries(wwhd PRIVATE cemu_latte glslang glslang-default-resource-limits SPIRV
+  target_link_libraries(wwhd PRIVATE cemu_latte zstd_dec glslang glslang-default-resource-limits SPIRV
                                      adrenotools android nativewindow log aaudio z dl)
   # libadrenotools' hooks, loaded into the driver's linker namespace (packaged next to libwwhd.so)
   add_dependencies(wwhd main_hook hook_impl)
@@ -168,7 +178,8 @@ elseif(ANDROID)
     "Vulkan Memory Allocator|MIT|${vma_SOURCE_DIR}/LICENSE.txt"
     "volk|MIT|${volk_SOURCE_DIR}/LICENSE.md"
     "libadrenotools|BSD-2-Clause|${adrenotools_SOURCE_DIR}/LICENSE"
-    "linkernsbypass (part of libadrenotools)|BSD-2-Clause|${adrenotools_SOURCE_DIR}/lib/linkernsbypass/LICENSE")
+    "linkernsbypass (part of libadrenotools)|BSD-2-Clause|${adrenotools_SOURCE_DIR}/lib/linkernsbypass/LICENSE"
+    "zstd (reading .wua archives)|BSD-3-Clause|${zstd_SOURCE_DIR}/LICENSE")
   set(WWHD_LLVM_DIR ${CMAKE_SOURCE_DIR}/build/llvm/install CACHE PATH "LLVM built for Android (tools/android/build-llvm.sh)")
   if(EXISTS ${WWHD_LLVM_DIR}/lib/cmake/llvm/LLVMConfig.cmake)
     find_package(LLVM REQUIRED CONFIG PATHS ${WWHD_LLVM_DIR}/lib/cmake/llvm NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)

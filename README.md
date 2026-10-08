@@ -11,7 +11,8 @@ compiles the game code on your device on the first start. Its full README (getti
 controllers, frame generation, building) is in [docs/android-port-readme.md](docs/android-port-readme.md).
 
 **The app contains no game files**, no game code and no keys. You need your own Wii U disc image
-(`.wud`/`.wux`) with its keys.
+(`.wud`/`.wux`) with its keys, or your own Wii U archive (`.wua`, Cemu's compressed format, no keys
+needed).
 
 ## What this fork adds
 
@@ -97,9 +98,11 @@ over the island, big islands seen from afar) can still drop, and a hot phone low
 ## Getting started
 
 1. Put your disc image (`.wux` or `.wud`), its disc key (`.key`, same name as the image) and the
-   Wii U common key (`common.key`) in one folder on your device.
-2. Install the APK from the Releases page and start it. Choose **Extract from your disc image…**
-   and select that folder.
+   Wii U common key (`common.key`) in one folder on your device. Or put only your Wii U archive
+   (`.wua`, as made by Cemu's *Convert to compressed Wii U archive*) there: it needs no keys, and
+   an update or DLC stored in it is skipped (the app uses the base game).
+2. Install the APK from the Releases page and start it. Choose **Extract from your disc image or
+   .wua…** and select that folder.
 3. The app extracts the game and compiles its code for your device (about 5 minutes, once).
 
 Requirements: Android 11 or newer, 64-bit ARM, Vulkan 1.1, about 2 GB of free storage and memory.

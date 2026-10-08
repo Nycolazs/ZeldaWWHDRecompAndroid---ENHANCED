@@ -1075,10 +1075,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     // ------------------------------------------------------------------ game from a disc image
     // The user picks a folder holding their .wux/.wud image, its disc key (same name, .key) and
-    // the console's common key (common.key); the game is extracted into files/game on the device.
+    // the console's common key (common.key), or a .wua archive (Cemu's format, already decrypted:
+    // no keys); the game is extracted into files/game on the device.
     private void startExtraction(android.net.Uri tree) {
         android.content.ContentResolver cr = getContentResolver();
-        android.net.Uri image = null, discKey = null, commonKey = null;
+        android.net.Uri image = null, discKey = null, commonKey = null, archive = null;
         String imageName = null;
         List<String[]> keys = new ArrayList<>();  // other .key files: {name, document id}
         String treeId = android.provider.DocumentsContract.getTreeDocumentId(tree);
@@ -1088,7 +1089,9 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             while (c != null && c.moveToNext()) {
                 String id = c.getString(0), name = c.getString(1), lower = name.toLowerCase(java.util.Locale.ROOT);
                 android.net.Uri u = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, id);
-                if ((lower.endsWith(".wux") || lower.endsWith(".wud")) && image == null) {
+                if (lower.endsWith(".wua") && archive == null) {
+                    archive = u;
+                } else if ((lower.endsWith(".wux") || lower.endsWith(".wud")) && image == null) {
                     image = u;
                     imageName = name.substring(0, name.length() - 4);
                 } else if (lower.equals("common.key")) {
@@ -1097,6 +1100,27 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                     keys.add(new String[] {name, id});
                 }
             }
+        }
+        if (archive != null) {  // needs no keys
+            int fd;
+            try {
+                android.os.ParcelFileDescriptor pfd = cr.openFileDescriptor(archive, "r");
+                if (pfd == null) throw new IOException("cannot open the archive");
+                fd = pfd.detachFd();
+            } catch (IOException e) {
+                new AlertDialog.Builder(this).setTitle(R.string.setup_extract).setMessage(e.getMessage())
+                        .setPositiveButton(android.R.string.ok, null).show();
+                return;
+            }
+            if (!enoughSpace(baseDir(), 2000L << 20)) {
+                try {
+                    android.os.ParcelFileDescriptor.adoptFd(fd).close();
+                } catch (IOException ignored) {
+                }
+                return;
+            }
+            runExtraction(fd, null, null);
+            return;
         }
         if (image != null)
             for (String[] k : keys)  // the disc key: the image's name with .key, else the only other key
@@ -1145,12 +1169,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         }
     }
 
+    /** dk and ck null: fd is a .wua archive */
     private void runExtraction(int fd, byte[] dk, byte[] ck) {
         File base = baseDir(), work = new File(base, "game-extracting"), game = new File(gameDir());
         askNotifications();
         boolean ok = WorkService.Work.start(this, WorkService.Work.EXTRACT, () -> {
             Backup.deleteTree(work);
-            String err = Native.extractGame(fd, dk, ck, work.getAbsolutePath());
+            String err = dk == null ? Native.extractArchive(fd, work.getAbsolutePath())
+                    : Native.extractGame(fd, dk, ck, work.getAbsolutePath());
             if (err == null) {  // complete: swap it in for the old game folder
                 Backup.deleteTree(game);
                 if (!work.renameTo(game)) err = "cannot move the extracted files into place";

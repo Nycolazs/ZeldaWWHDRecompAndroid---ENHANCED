@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "../audio_out.h"
+#include "../disc/wua.h"
 #include "../disc/wud.h"
 #include "../gx2/gx2.h"
 #include "../input.h"
@@ -206,6 +207,26 @@ JNI_FN(jstring, extractGame)(JNIEnv* env, jclass, jint fd, jbyteArray discKey, j
     if (ok) {
         LOG("[disc] title %s, %zu files", img.title_id().c_str(), img.files().size());
         ok = img.extract(jstr(env, outDir), [](uint64_t done, uint64_t total, const std::string&) {
+            g_extract_done = done;
+            g_extract_total = total;
+            return !g_extract_cancel.load();
+        }, err);
+    }
+    close(fd);
+    if (!ok) LOG("[disc] extraction failed: %s", err.c_str());
+    return ok ? nullptr : env->NewStringUTF(err.c_str());
+}
+// the same from a Wii U archive (.wua: Cemu's compressed, already decrypted format, no keys)
+JNI_FN(jstring, extractArchive)(JNIEnv* env, jclass, jint fd, jstring outDir) {
+    g_extract_done = 0;
+    g_extract_total = 0;
+    g_extract_cancel = false;
+    disc::Archive arc;
+    std::string err;
+    bool ok = arc.open(fd, err);
+    if (ok) {
+        LOG("[disc] archive: title %s, %zu files", arc.title_id().c_str(), arc.files().size());
+        ok = arc.extract(jstr(env, outDir), [](uint64_t done, uint64_t total, const std::string&) {
             g_extract_done = done;
             g_extract_total = total;
             return !g_extract_cancel.load();
