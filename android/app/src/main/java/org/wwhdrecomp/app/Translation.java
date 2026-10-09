@@ -18,8 +18,8 @@ import java.util.Locale;
  * translation's folder (the Cemu graphic pack or the console version, as they are distributed); its
  * message packs (content/Common/Pack/permanent_2d_*.pack) are copied to files/mods/ptbr/content/...
  * and, while the mod is on, the game reads them instead of its own (runtime/src/hle/fs.cpp, content
- * overlay). The translation replaces the English text, so the game language is set to English. No
- * file of the translation is part of the app.
+ * overlay). The translation replaces the English text, so the game language is set to English.
+ * The app also carries it as a patch over the player's own pack (installBuiltIn, PackPatch).
  */
 final class Translation {
     private Translation() {}
@@ -38,7 +38,9 @@ final class Translation {
         File f = new File(dir, "label.txt");
         if (!f.exists()) return "";
         try {
-            return new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
+            String l = new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
+            int nl = l.indexOf('\n');
+            return nl >= 0 ? l.substring(0, nl) : l;
         } catch (IOException e) {
             return "";
         }
@@ -88,46 +90,80 @@ final class Translation {
 
     static void remove(File dir) { Backup.deleteTree(dir); }
 
-    /**
-     * A personal build can carry the translation in its assets (ptbr/..., gradle -PwwhdBundleAssets):
-     * installed on the first start, and again when the build carries another version (label.txt).
-     */
-    static void installBundled(Context c, File dir) {
-        android.content.res.AssetManager am = c.getAssets();
+    // ---- the translation built into the app: a patch over the player's own message pack
+    // (tools/translation/make_pack_patch.py), so the app carries the translated texts and the
+    // changed font glyphs only, nothing of the game. Built into files/mods/ptbr on the first start,
+    // again when the patch changes (its CRC in label.txt).
+    static final String PATCH_ASSET = "ptbr/patch.bin", LABEL_ASSET = "ptbr/label.txt";
+    static final String[] ENGLISH_PACKS = {"permanent_2d_UsEnglish.pack", "permanent_2d_EuEnglish.pack"};
+
+    /** null when the translation is ready (built now or before), else why not */
+    static String installBuiltIn(Context c, File dir, File gameDir) {
+        byte[] patch;
+        String label;
         try {
-            String[] packs = am.list("ptbr/content/Common/Pack");
-            if (packs == null || packs.length == 0) return;
-            String label = "";
-            try (InputStream in = am.open("ptbr/label.txt")) {
-                label = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
-            } catch (IOException ignored) {
+            patch = readAsset(c, PATCH_ASSET);
+            label = new String(readAsset(c, LABEL_ASSET), java.nio.charset.StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            return "no built-in translation";
+        }
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(patch);
+        String stamp = label + "\n" + Long.toHexString(crc.getValue());
+        if (installed(dir) && stamp.equals(rawLabel(dir))) return null;
+        File tmp = new File(dir.getParentFile(), "ptbr.part");
+        Backup.deleteTree(tmp);
+        File out = packDir(tmp);
+        if (!out.mkdirs()) return "cannot create " + out;
+        int built = 0;
+        String err = null;
+        for (String name : ENGLISH_PACKS) {
+            File orig = new File(gameDir, "content/Common/Pack/" + name);
+            if (!orig.exists()) continue;
+            try {
+                PackPatch.apply(orig, patch, new File(out, name));
+                built++;
+            } catch (IOException e) {
+                err = name + ": " + e.getMessage();
             }
-            if (installed(dir) && label.equals(label(dir))) return;
-            File tmp = new File(dir.getParentFile(), "ptbr.part");
+        }
+        if (built == 0) {
             Backup.deleteTree(tmp);
-            File out = packDir(tmp);
-            if (!out.mkdirs()) return;
-            for (String p : packs)
-                try (InputStream in = am.open("ptbr/content/Common/Pack/" + p); OutputStream o = new FileOutputStream(new File(out, p))) {
-                    byte[] buf = new byte[1 << 16];
-                    for (int n; (n = in.read(buf)) > 0; ) o.write(buf, 0, n);
-                }
-            // identical packs are carried once: "copy=original" lines
-            try (InputStream in = am.open("ptbr/aliases.txt")) {
-                for (String line : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).split("\n")) {
-                    int eq = line.indexOf('=');
-                    if (eq <= 0) continue;
-                    File from = new File(out, line.substring(eq + 1).trim()), to = new File(out, line.substring(0, eq).trim());
-                    if (from.exists()) java.nio.file.Files.copy(from.toPath(), to.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                }
-            } catch (IOException ignored) {
-            }
-            try (OutputStream o = new FileOutputStream(new File(tmp, "label.txt"))) {
-                o.write(label.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            }
-            Backup.deleteTree(dir);
-            if (!tmp.renameTo(dir)) Backup.deleteTree(tmp);
-        } catch (IOException ignored) {
+            return err != null ? err : "the game has no English message pack";
+        }
+        try (OutputStream o = new FileOutputStream(new File(tmp, "label.txt"))) {
+            o.write(stamp.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            Backup.deleteTree(tmp);
+            return e.getMessage();
+        }
+        Backup.deleteTree(dir);
+        if (!tmp.renameTo(dir)) {
+            Backup.deleteTree(tmp);
+            return "cannot move the translation into place";
+        }
+        return null;
+    }
+
+    static boolean hasBuiltIn(Context c) {
+        try (InputStream in = c.getAssets().open(PATCH_ASSET)) {
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static byte[] readAsset(Context c, String name) throws IOException {
+        try (InputStream in = c.getAssets().open(name)) {
+            return in.readAllBytes();
+        }
+    }
+
+    private static String rawLabel(File dir) {
+        try {
+            return new String(java.nio.file.Files.readAllBytes(new File(dir, "label.txt").toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            return "";
         }
     }
 

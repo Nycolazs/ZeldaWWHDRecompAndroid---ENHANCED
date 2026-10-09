@@ -70,13 +70,6 @@ android {
         }
     }
 
-    // -PwwhdBundleAssets=<dir>: extra assets for a personal build (e.g. ptbr/content/Common/Pack/*.pack,
-    // the user's own copy of a translation, installed on first start: Translation.java). Never for
-    // APKs you share: the packs are modified game files.
-    if (project.hasProperty('wwhdBundleAssets')) {
-        sourceSets { main { assets.srcDirs += [project.property('wwhdBundleAssets')] } }
-    }
-
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
