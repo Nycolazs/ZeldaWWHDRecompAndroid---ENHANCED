@@ -235,7 +235,21 @@ bool root_on_tv(uint32_t root) {
         if (r == root) return tv;
     return true;  // not reported (yet): layouts are TV layouts unless seen on the GamePad
 }
+// the swap each layout root was last drawn at (any screen): layouts the game keeps but doesn't draw
+// (a parked copy of the HUD) don't give the HUD editor their bounds
+std::unordered_map<uint32_t, uint64_t> g_root_drawn;
+bool root_drawn_recently(uint32_t root) {
+    std::lock_guard<std::mutex> lk(g_root_mu);
+    auto it = g_root_drawn.find(root);
+    return it != g_root_drawn.end() && g_swaps - it->second < 30;
+}
+void mark_drawn(uint32_t root) {
+    std::lock_guard<std::mutex> lk(g_root_mu);
+    if (g_root_drawn.size() > 512) g_root_drawn.clear();
+    g_root_drawn[root] = g_swaps;
+}
 void set_root_tv(uint32_t root, bool tv) {
+    mark_drawn(root);
     std::lock_guard<std::mutex> lk(g_root_mu);
     for (auto& e : g_root_tv)
         if (e.first == root) { e.second = tv; return; }
@@ -383,7 +397,7 @@ extern "C" void hook_028766CC(Cpu* c) {
         calc_mtx(c);
         t_part = -1;
         add_bounds(pane, part);
-        if (g_bounds_any[part] && !g_hud_hidden[part].load(std::memory_order_relaxed)) {
+        if (g_bounds_any[part] && !g_hud_hidden[part].load(std::memory_order_relaxed) && root_drawn_recently(t_root)) {
             std::lock_guard<std::mutex> lk(g_bounds_mu);
             memcpy(g_bounds[part], g_bounds_acc[part], sizeof g_bounds[part]);
             g_bounds_ok[part] = true;
@@ -558,11 +572,10 @@ static void calc_mtx(Cpu* c) {
 extern "C" void hook_02877100(Cpu* c) {
     using namespace aspect;
     uint32_t pane = c->r[3];
-    if (original()) { f_02877100_orig(c); return; }
     uint32_t parent = ld32(pane + kPaneParent);
-    if (!parent) {
-        gx2::emit(gx2::OP_LAYOUT_ROOT, {pane});
-    } else {
+    if (!parent) gx2::emit(gx2::OP_LAYOUT_ROOT, {pane});  // also at 16:9: the HUD editor wants the drawn roots
+    if (original()) { f_02877100_orig(c); return; }
+    if (parent) {
         // the wider (taller) picture shows layout space the game uses to park panes out of sight:
         // a pane whose centre, without our offsets, is off the 16:9 screen stays hidden
         uint32_t child = pane, root = parent;
@@ -614,7 +627,11 @@ static void with_tv_projection(Cpu* c, void (*fn)(Cpu*)) {
 }
 namespace aspect {
 bool tagged_projection() { return t_tag > 0; }
-void layout_root_target(uint32_t root, bool tv) { set_root_tv(root, tv); }
+// at 16:9 the target can't be told apart (no factors): only that the root was drawn
+void layout_root_target(uint32_t root, bool tv) {
+    if (original()) mark_drawn(root);
+    else set_root_tv(root, tv);
+}
 }  // namespace aspect
 
 // DrawInfo::LoadProjectionMtx(this): TV layouts are drawn into the wider screen undistorted
