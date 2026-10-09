@@ -216,6 +216,7 @@ extern "C" void site_025ADB38(Cpu* c) { adjust_projection_args(c, 1, 2); }
 //     for the call (dirty bit forced so the matrix is recomputed), so animations and game code keep
 //     their values. Panes the game parks off the 16:9 screen are not drawn (they would show in the
 //     extra space).
+namespace interp { bool menu_open(); }
 extern "C" {
 void f_02874038_orig(Cpu* c);
 void f_028766CC_orig(Cpu* c);
@@ -347,15 +348,25 @@ extern "C" void hook_028766CC(Cpu* c) {
         // a root placed by the game (layouts are authored with the root at 0,0): small layouts put at
         // an actor's projected screen position (cursors, markers) -> scaled out with the 3D view
         float tx = (float)ldf32(pane + kPaneTrans), ty = (float)ldf32(pane + kPaneTrans + 4);
-        bool placed = t_anchor && (tx != 0.0f || ty != 0.0f);
+        // not in the game's menus (pause / item menu, title, file select): their cursors are roots
+        // placed on menu panes, which stay in 16:9 layout space
+        bool placed = t_anchor && (tx != 0.0f || ty != 0.0f) && !interp::menu_open();
         // debug: WWHD_ASPECT_LOG=1 logs each placed root (name, translation) once per name
         static const bool log_roots = getenv("WWHD_ASPECT_LOG") != nullptr;
         if (log_roots && placed) {
             static std::mutex mu;
-            static std::unordered_map<std::string, int> seen;
+            static std::unordered_map<uint32_t, std::pair<float, float>> seen;
             std::string nm((const char*)mem::ptr(pane + kPaneName), strnlen((const char*)mem::ptr(pane + kPaneName), 24));
             std::lock_guard<std::mutex> lk(mu);
-            if (seen[nm]++ == 0) LOG("[aspect] placed root '%s' at %.1f, %.1f", nm.c_str(), tx, ty);
+            auto& v = seen[pane];
+            if (v.first != tx || v.second != ty) {
+                v = {tx, ty};
+                uint32_t first = ld32(pane + kPaneChildren);
+                std::string child = first && first != pane + kPaneChildren
+                    ? std::string((const char*)mem::ptr(first + kPaneName), strnlen((const char*)mem::ptr(first + kPaneName), 24)) : "";
+                LOG("[aspect] placed root '%s' %08X at %.1f, %.1f size %.0fx%.0f first child '%s'", nm.c_str(), pane, tx, ty,
+                    (float)ldf32(pane + kPaneSize), (float)ldf32(pane + kPaneSize + 4), child.c_str());
+            }
         }
         // matrices are only recomputed for dirty panes: after an aspect change, the whole tree
         if (anchor_changed(pane, t_anchor) || (g_changed_swap && g_swaps - g_changed_swap < 4)) c->r[5] = 1;
@@ -484,11 +495,28 @@ extern "C" void hook_02877100(Cpu* c) {
         // a pane whose centre, without our offsets, is off the 16:9 screen stays hidden
         uint32_t child = pane, root = parent;
         for (int i = 0; i < 16 && ld32(root + kPaneParent); i++) { child = root; root = ld32(root + kPaneParent); }
-        if (!ld32(root + kPaneParent) && root_on_tv(root)) {
+        // not in the game's menus: the item menu slides its pages with the layout's view, not the
+        // panes, so the page being shown has panes "beyond" the screen (they all vanished)
+        if (!ld32(root + kPaneParent) && root_on_tv(root) && !interp::menu_open()) {
             auto a = offset_of(child), b = offset_of(root);
             float gx = (float)ldf32(pane + kPaneGlobal + 0xC) - a.first - b.first;
             float gy = (float)ldf32(pane + kPaneGlobal + 0x1C) - a.second - b.second;
-            if (std::fabs(gx) > 640.0f + 32.0f || std::fabs(gy) > 360.0f + 32.0f) {
+            // the pane's half extent (size times its global scale): hidden only when it lies wholly
+            // outside the 16:9 screen (the item menu's tabs and page arrows reach into it from beyond)
+            float hw = 0.5f * (float)ldf32(pane + kPaneSize) * std::fabs((float)ldf32(pane + kPaneGlobal));
+            float hh = 0.5f * (float)ldf32(pane + kPaneSize + 4) * std::fabs((float)ldf32(pane + kPaneGlobal + 0x14));
+            if (!(hw >= 0.0f && hw < 4096.0f)) hw = 0.0f;
+            if (!(hh >= 0.0f && hh < 4096.0f)) hh = 0.0f;
+            if (std::fabs(gx) - hw > 640.0f + 32.0f || std::fabs(gy) - hh > 360.0f + 32.0f) {
+                static const bool log_hide = getenv("WWHD_ASPECT_LOG") != nullptr;
+                if (log_hide) {
+                    static std::mutex mu;
+                    static std::unordered_map<uint32_t, int> seen;
+                    std::lock_guard<std::mutex> lk(mu);
+                    if (seen[pane]++ % 300 == 0)
+                        LOG("[aspect] hidden '%.24s' %08X (child '%.24s', root %08X): %.1f, %.1f", (const char*)mem::ptr(pane + kPaneName), pane,
+                            (const char*)mem::ptr(child + kPaneName), root, gx, gy);
+                }
                 static const bool log_hud = getenv("WWHD_HUD_LOG") != nullptr;
                 if (log_hud && (a.first != 0.0f || a.second != 0.0f)) {
                     static uint64_t n = 0;
