@@ -46,6 +46,17 @@
         <item>Small keys</item>
         <item>Wind compass and clock</item>
     </string-array>
+    <string name="opt_app_language">App language</string>
+    <string name="opt_app_language_hint">This app\'s menus and messages (the game\'s text is under Game › Game language, or the translation in Mods)</string>
+    <string-array name="app_languages">
+        <item>System</item>
+        <item>English</item>
+        <item>Português (Brasil)</item>
+    </string-array>
+    <string name="pad_face_bottom">Bottom face button (A / Cross)</string>
+    <string name="pad_face_right">Right face button (B / Circle)</string>
+    <string name="pad_face_left">Left face button (X / Square)</string>
+    <string name="pad_face_top">Top face button (Y / Triangle)</string>
     <string name="opt_menu_size">Menu size</string>
     <string name="opt_menu_size_hint">The menus fit the screen on their own; this makes them smaller or larger.</string>
     <string name="setup_retry">Check again</string>

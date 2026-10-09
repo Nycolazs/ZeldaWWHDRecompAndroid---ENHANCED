@@ -104,24 +104,25 @@ final class InputMapper {
     }
 
     /** a controller button's name, by position for the face buttons (their letters differ by brand) */
-    static String buttonName(int code) {
+    static String buttonName(android.content.Context c, int code) {
         switch (code) {
-            case KeyEvent.KEYCODE_BUTTON_A: return "Bottom face button (A / Cross)";
-            case KeyEvent.KEYCODE_BUTTON_B: return "Right face button (B / Circle)";
-            case KeyEvent.KEYCODE_BUTTON_X: return "Left face button (X / Square)";
-            case KeyEvent.KEYCODE_BUTTON_Y: return "Top face button (Y / Triangle)";
+            case KeyEvent.KEYCODE_BUTTON_A: return c.getString(R.string.pad_face_bottom);
+            case KeyEvent.KEYCODE_BUTTON_B: return c.getString(R.string.pad_face_right);
+            case KeyEvent.KEYCODE_BUTTON_X: return c.getString(R.string.pad_face_left);
+            case KeyEvent.KEYCODE_BUTTON_Y: return c.getString(R.string.pad_face_top);
             case KeyEvent.KEYCODE_BUTTON_L1: return "L1 / LB";
             case KeyEvent.KEYCODE_BUTTON_R1: return "R1 / RB";
             case KeyEvent.KEYCODE_BUTTON_L2: return "L2 / LT";
             case KeyEvent.KEYCODE_BUTTON_R2: return "R2 / RT";
             case KeyEvent.KEYCODE_BUTTON_SELECT: case KeyEvent.KEYCODE_BACK: return "Select / View / Share";
             case KeyEvent.KEYCODE_BUTTON_START: return "Start / Menu / Options";
-            case KeyEvent.KEYCODE_BUTTON_THUMBL: return "Left stick click";
-            case KeyEvent.KEYCODE_BUTTON_THUMBR: return "Right stick click";
-            case KeyEvent.KEYCODE_DPAD_UP: return "D-pad up";
-            case KeyEvent.KEYCODE_DPAD_DOWN: return "D-pad down";
-            case KeyEvent.KEYCODE_DPAD_LEFT: return "D-pad left";
-            case KeyEvent.KEYCODE_DPAD_RIGHT: return "D-pad right";
+            case KeyEvent.KEYCODE_BUTTON_THUMBL: case KeyEvent.KEYCODE_BUTTON_THUMBR:
+            case KeyEvent.KEYCODE_DPAD_UP: case KeyEvent.KEYCODE_DPAD_DOWN: case KeyEvent.KEYCODE_DPAD_LEFT: case KeyEvent.KEYCODE_DPAD_RIGHT: {
+                // as the Wii U buttons' names (wiiu_buttons: 10 L3, 11 R3, 12..15 D-pad)
+                int i = code == KeyEvent.KEYCODE_BUTTON_THUMBL ? 10 : code == KeyEvent.KEYCODE_BUTTON_THUMBR ? 11
+                        : code == KeyEvent.KEYCODE_DPAD_UP ? 12 : code == KeyEvent.KEYCODE_DPAD_DOWN ? 13 : code == KeyEvent.KEYCODE_DPAD_LEFT ? 14 : 15;
+                return c.getResources().getStringArray(R.array.wiiu_buttons)[i];
+            }
             default: return KeyEvent.keyCodeToString(code).replace("KEYCODE_", "").replace('_', ' ');
         }
     }

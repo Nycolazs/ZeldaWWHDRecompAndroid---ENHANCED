@@ -552,6 +552,14 @@ final class OptionsMenu extends Dialog {
             if (MainActivity.LANGUAGES[langs[i]].equals(a.gameLanguage())) curLang = i;
         }
         choice(R.string.opt_language, R.string.opt_language_hint, names, curLang, i -> a.setGameLanguage(MainActivity.LANGUAGES[langs[i]]));
+        choice(R.string.opt_app_language, R.string.opt_app_language_hint, a.getResources().getStringArray(R.array.app_languages),
+                a.prefs.getInt("app_language", 0), i -> {
+                    a.prefs.edit().putInt("app_language", i).commit();
+                    rows.post(() -> {  // the menus again in the new language
+                        dismiss();
+                        a.recreateUi();
+                    });
+                });
         String[] sizes = new String[MainActivity.MENU_SIZES.length];
         int curSize = 3;
         for (int i = 0; i < sizes.length; i++) {
@@ -710,13 +718,13 @@ final class OptionsMenu extends Dialog {
             final int n = i;
             LinearLayout r = rowText(names[i], null);
             TextView v = new TextView(getContext());
-            v.setText(InputMapper.buttonName(m.map[i]) + "  ›");
+            v.setText(InputMapper.buttonName(getContext(), m.map[i]) + "  ›");
             v.setTextColor(INK);
             v.setTextSize(16);
             v.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
             r.addView(v, new LinearLayout.LayoutParams(-2, -2));
             r.setOnClickListener(x -> new GameDialog(getContext()).title(names[n])
-                    .message(a.getString(R.string.opt_buttons_press, names[n], InputMapper.buttonName(m.map[n])))
+                    .message(a.getString(R.string.opt_buttons_press, names[n], InputMapper.buttonName(getContext(), m.map[n])))
                     .button(R.string.opt_cancel, null)
                     .captureButton(code -> { a.assignButton(n, code); fill(); })
                     .show());

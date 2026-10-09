@@ -2,6 +2,7 @@ package org.wwhdrecomp.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.RectF;
@@ -62,6 +63,33 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private final InputMapper mapper = new InputMapper();
     private boolean autoHidden;
     private int surfaceW, surfaceH;
+
+    // the app's own language (Game › App language): 0 the system's, 1 English, 2 Portuguese (Brazil)
+    static final String[] APP_LOCALES = {"", "en", "pt-BR"};
+
+    static Context withAppLanguage(Context base) {
+        int l = base.getSharedPreferences(PREFS, MODE_PRIVATE).getInt("app_language", 0);
+        if (l <= 0 || l >= APP_LOCALES.length) return base;
+        java.util.Locale loc = java.util.Locale.forLanguageTag(APP_LOCALES[l]);
+        android.content.res.Configuration cfg = new android.content.res.Configuration(base.getResources().getConfiguration());
+        cfg.setLocale(loc);
+        return base.createConfigurationContext(cfg);
+    }
+
+    @Override
+    protected void attachBaseContext(Context base) { super.attachBaseContext(withAppLanguage(base)); }
+
+    /** after App language changed: this activity's resources in the new language, the menu opened again */
+    @SuppressWarnings("deprecation")
+    void recreateUi() {
+        int l = prefs.getInt("app_language", 0);
+        android.content.res.Configuration cfg = new android.content.res.Configuration(getResources().getConfiguration());
+        cfg.setLocale(l > 0 && l < APP_LOCALES.length ? java.util.Locale.forLanguageTag(APP_LOCALES[l])
+                : android.content.res.Resources.getSystem().getConfiguration().getLocales().get(0));
+        getResources().updateConfiguration(cfg, getResources().getDisplayMetrics());
+        if (controls != null) controls.invalidate();
+        new OptionsMenu(this).show();
+    }
 
     @Override
     protected void onCreate(Bundle state) {
