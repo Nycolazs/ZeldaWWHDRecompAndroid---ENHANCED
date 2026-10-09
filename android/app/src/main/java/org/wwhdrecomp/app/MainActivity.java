@@ -587,8 +587,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     // on its first input. A controller in use went away: back to touch.
     private final android.hardware.input.InputManager.InputDeviceListener deviceListener =
             new android.hardware.input.InputManager.InputDeviceListener() {
-        @Override public void onInputDeviceAdded(int id) { controllerConnected(InputDevice.getDevice(id)); }
-        @Override public void onInputDeviceChanged(int id) { controllerConnected(InputDevice.getDevice(id)); }
+        @Override public void onInputDeviceAdded(int id) { deviceAppeared(id); }
+        @Override public void onInputDeviceChanged(int id) { deviceAppeared(id); }
         @Override public void onInputDeviceRemoved(int id) {
             if (lastController == null || lastController.getId() != id) return;
             inputSource(null);
@@ -783,6 +783,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         else motion.stop();
     }
 
+    /** the motion source for the menu: a controller's name, this device, or off */
+    String motionSourceLabel() {
+        String s = motion != null ? motion.source() : null;
+        if (s == null) return getString(R.string.motion_source_off);
+        if (s.isEmpty()) return getString(lastController != null ? R.string.motion_source_device_no_pad : R.string.motion_source_device);
+        return getString(R.string.motion_source_pad, s);
+    }
+
     void setMotion(boolean on) {
         prefs.edit().putBoolean("motion", on).apply();
         if (started) startMotion();
@@ -825,6 +833,15 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             }
         }
         controllerUsed();
+    }
+
+    // a controller, or the motion sensors of the controller in use (a separate device with some
+    // kernel drivers, which can come up after the gamepad)
+    private void deviceAppeared(int id) {
+        InputDevice d = InputDevice.getDevice(id);
+        controllerConnected(d);
+        if (started && motion != null && lastController != null && !motion.fromController() && MotionInput.hasMotion(lastController))
+            startMotion();
     }
 
     private void controllerConnected(InputDevice d) {

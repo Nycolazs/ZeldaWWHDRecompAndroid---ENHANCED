@@ -674,7 +674,8 @@ final class OptionsMenu extends Dialog {
         });
         String[] kinds = {a.getString(R.string.controller_gamepad), a.getString(R.string.controller_pro)};
         choice(R.string.opt_controller, 0, kinds, Native.getOption("pro_controller") != 0 ? 1 : 0, i -> a.setBool("pro_controller", i == 1));
-        toggle(R.string.opt_motion, R.string.opt_motion_hint, a.prefs.getBoolean("motion", true), a::setMotion);
+        toggleText(a.getString(R.string.opt_motion), a.getString(R.string.opt_motion_hint) + "\n" + a.motionSourceLabel(),
+                a.prefs.getBoolean("motion", true), a::setMotion);
         if (a.prefs.getBoolean("motion", true))
             submenu(R.string.opt_gyro_recalibrate, R.string.opt_gyro_recalibrate_hint, "", a::recalibrateGyro);
         toggle(R.string.opt_rumble, R.string.opt_rumble_hint, a.prefs.getBoolean("rumble", true), a::setRumble);
@@ -780,7 +781,11 @@ final class OptionsMenu extends Dialog {
     }
 
     private void toggle(int label, int hint, boolean on, BoolSetter set) {
-        LinearLayout r = row(label, hint);
+        toggleText(a.getString(label), hint != 0 ? a.getString(hint) : null, on, set);
+    }
+
+    private void toggleText(String label, String hint, boolean on, BoolSetter set) {
+        LinearLayout r = rowText(label, hint);
         TextView pill = GameUi.pill(getContext(), on);
         r.addView(pill, new LinearLayout.LayoutParams(px(92), px(38)));
         r.setOnClickListener(v -> { set.set(!on); fill(); });

@@ -2,6 +2,10 @@
 <resources>
     <string name="setup_text">Os arquivos do jogo não foram encontrados ou não correspondem a esta versão.\n\nEste app contém apenas o código recompilado a partir da sua própria cópia do jogo; ele precisa dos arquivos extraídos do mesmo dump. Extraia-os num computador (veja README.md: tools/wudextract.py) e copie a pasta resultante (com code/, content/ e meta/ dentro) para:\n\n%1$s\n\nPor exemplo: adb push game /sdcard/Android/data/org.wwhdrecomp.app/files/\n\nProblema: %2$s</string>
     <string name="touch_skip">Pular</string>
+    <string name="motion_source_pad">Agora: os sensores de %1$s</string>
+    <string name="motion_source_device">Agora: os sensores deste aparelho</string>
+    <string name="motion_source_device_no_pad">Agora: os sensores deste aparelho (o controle em uso não informa nenhum)</string>
+    <string name="motion_source_off">Agora: desligado</string>
     <string name="gpu_safe_title">Modo seguro da GPU</string>
     <string name="restart_needed">Isso vale após reiniciar.</string>
     <string name="gpu_safe_notice">O jogo fechou da última vez por causa do driver da GPU (%2$s). Agora ele roda no modo seguro da GPU, nível %1$d, que evita recursos que alguns drivers tratam mal. Você pode mudar isso em Gráficos › Modo seguro da GPU.</string>
