@@ -37,6 +37,8 @@
 namespace gfx {
 int ao_mode();
 void set_ao_mode(int m);
+int bloom_strength();
+void set_bloom_strength(int pct);
 bool aniso_enabled();
 void set_aniso(bool v);
 bool ao_hires_enabled();
@@ -469,6 +471,7 @@ JNI_FN(void, setOption)(JNIEnv* env, jclass, jstring name, jint value) {
     std::string n = jstr(env, name);
     if (n != "capture") crash_info::option(n, value);
     if (n == "ao_mode") gfx::set_ao_mode(value);
+    else if (n == "bloom_strength") gfx::set_bloom_strength(value);
     else if (n == "ao_hires") gfx::set_ao_hires(value != 0);
     else if (n == "aniso") gfx::set_aniso(value != 0);
     else if (n == "pro_controller") input::set_pro_controller(value != 0);
@@ -504,6 +507,7 @@ JNI_FN(void, setOption)(JNIEnv* env, jclass, jstring name, jint value) {
 JNI_FN(jint, getOption)(JNIEnv* env, jclass, jstring name) {
     std::string n = jstr(env, name);
     if (n == "ao_mode") return gfx::ao_mode();
+    if (n == "bloom_strength") return gfx::bloom_strength();
     if (n == "ao_hires") return gfx::ao_hires_enabled();
     if (n == "aniso") return gfx::aniso_enabled();
     if (n == "pro_controller") return input::pro_controller();

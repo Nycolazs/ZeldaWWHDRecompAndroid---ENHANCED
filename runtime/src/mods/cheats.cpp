@@ -104,9 +104,11 @@ void all_items(uint32_t s) {
 }
 
 void best_sword(uint32_t s) {
-    st8(s + kCollect + 0, 0x0F);  // hero's sword .. full-power Master Sword
+    // Sword ownership is story progress: bit 2 removes Medli from Dragon Roost and the Earth
+    // Temple; bit 3 removes Makar from his earlier locations. Equip the upgrades without claiming
+    // those story milestones; the game's equipment refresh restores the earned equipment on reload
+    // (original project 7280fcd).
     st8(s + kSelectEquip + 0, 0x3E);
-    st8(s + kCollect + 1, 0x03);  // hero's + mirror shield
     st8(s + kSelectEquip + 1, 0x3C);
 }
 

@@ -477,6 +477,19 @@ final class OptionsMenu extends Dialog {
             a.updateLayout();
         });
         choice(R.string.opt_ao, 0, a.getResources().getStringArray(R.array.ao_modes), Native.getOption("ao_mode"), a::setAo);
+        {  // bloom strength, percent (100: the original game)
+            int[] pcts = {0, 25, 50, 75, 100, 125, 150, 200};
+            String[] labels = new String[pcts.length];
+            int cur = 4, saved = a.prefs.getInt("bloom_strength", 100);
+            for (int i = 0; i < pcts.length; i++) {
+                labels[i] = pcts[i] == 0 ? a.getString(R.string.opt_off) : pcts[i] + "%";
+                if (pcts[i] == saved) cur = i;
+            }
+            choice(R.string.opt_bloom, R.string.opt_bloom_hint, labels, cur, i -> {
+                a.prefs.edit().putInt("bloom_strength", pcts[i]).apply();
+                Native.setOption("bloom_strength", pcts[i]);
+            });
+        }
         toggle(R.string.opt_ao_hires, 0, Native.getOption("ao_hires") != 0, on -> a.setBool("ao_hires", on));
         toggle(R.string.opt_aniso, 0, Native.getOption("aniso") != 0, on -> a.setBool("aniso", on));
         submenu(R.string.opt_perf, R.string.opt_perf_hint, a.getString(a.prefs.getBoolean("perf_hud", false) ? R.string.opt_on : R.string.opt_off),
