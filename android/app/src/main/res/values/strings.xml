@@ -4,6 +4,16 @@
 
     <string name="setup_text">The game files were not found or don\'t match this build.\n\nThis app contains only the recompiled code built from your own copy of the game; it needs the extracted game files from the same dump. Extract them on a computer (see README.md: tools/wudextract.py), then copy the resulting folder (with code/, content/ and meta/ inside) to:\n\n%1$s\n\nFor example: adb push game /sdcard/Android/data/org.wwhdrecomp.app/files/\n\nProblem: %2$s</string>
     <string name="touch_skip">Skip</string>
+    <string name="gpu_safe_title">GPU safe mode</string>
+    <string name="restart_needed">This applies after a restart.</string>
+    <string name="gpu_safe_notice">The game closed last time because of the GPU driver (%2$s). It now runs in GPU safe mode level %1$d, which avoids features some drivers handle badly. You can change it under Graphics › GPU safe mode.</string>
+    <string name="opt_gpu_safe">GPU safe mode</string>
+    <string name="opt_gpu_safe_hint">Turned on by itself after a GPU driver crash; avoids features some drivers handle badly. Applies after a restart</string>
+    <string-array name="gpu_safe_modes">
+        <item>Off</item>
+        <item>Basic</item>
+        <item>Maximum</item>
+    </string-array>
     <string name="opt_ptbr">Portuguese (Brazil) translation</string>
     <string name="opt_ptbr_hint">The game\'s text in Brazilian Portuguese (Triforce-Heroes fan translation)</string>
     <string name="ptbr_not_installed">not installed</string>

@@ -484,6 +484,10 @@ final class OptionsMenu extends Dialog {
                 () -> openPage(this::perfPage));
         if (GpuDrivers.supported())
             submenu(R.string.opt_gpu_driver, R.string.opt_gpu_driver_hint, a.gpuDriverLabel(), () -> openPage(this::gpuDriverPage));
+        choice(R.string.opt_gpu_safe, R.string.opt_gpu_safe_hint, a.getResources().getStringArray(R.array.gpu_safe_modes), a.gpuSafeLevel(), i -> {
+            a.setGpuSafeLevel(i);
+            a.askRestart(R.string.opt_gpu_safe);
+        });
         submenu(R.string.opt_shaders, R.string.opt_shaders_hint, "", a::askClearShaders);
         if (a.debuggable())  // a debugging aid: debug builds only
             submenu(R.string.opt_capture, R.string.opt_capture_hint, "", () -> Native.setOption("capture", 1));

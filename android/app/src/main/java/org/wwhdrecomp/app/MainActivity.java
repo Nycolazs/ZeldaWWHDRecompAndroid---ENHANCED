@@ -71,11 +71,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         firstStartDefaults();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        // the game uses the whole screen, also beside the camera cutout: no inset padding for the views
+        getWindow().setDecorFitsSystemWindows(false);
         if (!libraryLoaded) {
             // static initializers in the library read these, so they must be set before it loads
             setenv("WWHD_RES_SCALE", prefs.getString("res_scale", "1"));  // wwhd.env / intent extras below override
             setenv("WWHD_LANGUAGE", gameLanguage());
             applyFrameGenSettings();
+            gpuSafeAtStart();
             applyEnvironment();
             // a shader dump (WWHD_DUMP_SHADERS=<files>/shaders, debugging) left from an earlier start
             if (Os.getenv("WWHD_DUMP_SHADERS") == null) Backup.deleteTree(new File(baseDir(), "shaders"));
@@ -122,7 +125,11 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     // ---- the Brazilian Portuguese translation (Translation.java)
     File ptbrDir() { return Translation.dir(this, baseDir()); }
     boolean ptbrInstalled() { return Translation.installed(ptbrDir()); }
-    boolean ptbrEnabled() { return prefs.getBoolean("mod_ptbr", false) && ptbrInstalled(); }
+    // on by default where the device speaks Portuguese
+    boolean ptbrEnabled() {
+        boolean def = java.util.Locale.getDefault().getLanguage().equals("pt");
+        return prefs.getBoolean("mod_ptbr", def) && ptbrInstalled();
+    }
 
     /** on: the translation replaces the English text, so the game's language becomes English; restarts */
     void setPtbr(boolean on) {
@@ -136,6 +143,62 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     void removePtbr() {
         prefs.edit().putBoolean("mod_ptbr", false).commit();
         Translation.remove(ptbrDir());
+    }
+
+    // ---- GPU safe mode: a session that ended in a Vulkan error or a crash inside the GPU driver
+    // (the runtime's marker, WWHD_GPU_CRASH_FILE) raises it one level at the next start. Level 1:
+    // BC textures decoded on the CPU, full barriers, one submission per frame; level 2 also records on
+    // the render thread and leaves out the render target mip chains. A custom driver goes back to the
+    // system's. The level stays until changed in Graphics.
+    static final int GPU_SAFE_MAX = 2;
+    private String gpuCrashReason;  // the last session's, shown once the game screen is up
+
+    File gpuCrashFile() { return new File(baseDir(), "gpu_crash.txt"); }
+
+    int gpuSafeLevel() { return prefs.getInt("gpu_safe", 0); }
+
+    void setGpuSafeLevel(int l) { prefs.edit().putInt("gpu_safe", Math.max(0, Math.min(GPU_SAFE_MAX, l))).commit(); }
+
+    private void gpuSafeAtStart() {
+        File f = gpuCrashFile();
+        if (f.exists()) {
+            try {
+                gpuCrashReason = new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
+            } catch (IOException e) {
+                gpuCrashReason = "";
+            }
+            //noinspection ResultOfMethodCallIgnored
+            f.delete();
+            if (!prefs.getString("gpu_driver", "").isEmpty()) prefs.edit().putString("gpu_driver", "").commit();  // custom driver: back to the system's
+            else setGpuSafeLevel(gpuSafeLevel() + 1);
+        }
+        setenv("WWHD_GPU_CRASH_FILE", f.getAbsolutePath());
+        int l = gpuSafeLevel();
+        if (l >= 1) {
+            setenv("WWHD_BC_DECODE", "cpu");
+            setenv("WWHD_BROAD_BARRIERS", "1");
+            setenv("WWHD_NO_CHUNK", "1");
+        }
+        if (l >= 2) {
+            setenv("WWHD_RECORD_THREAD", "0");
+            setenv("WWHD_NO_RT_MIPS", "1");
+        }
+    }
+
+    private void showGpuCrashNotice() {
+        if (gpuCrashReason == null) return;
+        String why = gpuCrashReason;
+        gpuCrashReason = null;
+        new GameDialog(this).title(R.string.gpu_safe_title)
+                .message(getString(R.string.gpu_safe_notice, gpuSafeLevel(), why.isEmpty() ? "?" : why))
+                .button(R.string.opt_ok, null).show();
+    }
+
+    /** a setting that applies after a restart */
+    void askRestart(int title) {
+        new GameDialog(this).title(title).message(R.string.restart_needed)
+                .button(R.string.gpu_driver_later, null)
+                .button(R.string.res_restart_now, this::restartApp).show();
     }
 
     void askRestartForLanguage() {
@@ -253,7 +316,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             }, "icons").start();
         }
         String failedDriver = applyGpuDriver();
-        Translation.installBundled(this, ptbrDir());  // a personal build's own copy (once)
+        if (Translation.hasBuiltIn(this)) {  // the built-in Portuguese translation, from the player's own pack (once)
+            String terr = Translation.installBuiltIn(this, ptbrDir(), new File(gameDir()));
+            if (terr != null) Log.w(TAG, "translation: " + terr);
+        }
         Native.setContentOverlay(ptbrEnabled() ? ptbrDir().getAbsolutePath() : "");
         Native.start(gameDir(), new File(base, "save").getAbsolutePath(),
                 new File(getNoBackupFilesDir(), "shadercache").getAbsolutePath(), base.getAbsolutePath());
@@ -263,6 +329,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         showGame();
         updateDrcDisplay();
         checkControllerConnected();
+        showGpuCrashNotice();
         if (failedDriver != null)
             new GameDialog(this).title(R.string.opt_gpu_driver).message(getString(R.string.gpu_driver_failed, failedDriver))
                     .button(R.string.opt_ok, null).show();
