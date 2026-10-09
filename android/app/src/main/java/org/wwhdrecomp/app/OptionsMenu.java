@@ -527,9 +527,10 @@ final class OptionsMenu extends Dialog {
     private void mods() {
         submenu(R.string.opt_cheats, R.string.opt_cheats_hint, "", () -> openPage(this::cheatsPage));
         int[] labels = {R.string.opt_mod_direct_camera, R.string.opt_mod_first_person, R.string.opt_mod_climb,
-                        R.string.opt_mod_quick_doors, R.string.opt_mod_fast_scenes};
+                        R.string.opt_mod_quick_doors, R.string.opt_mod_fast_scenes, R.string.opt_mod_ff_cutscenes,
+                        R.string.opt_mod_ff_dialogues};
         int[] hints = {R.string.opt_mod_direct_camera_hint, 0, R.string.opt_mod_climb_hint, R.string.opt_mod_speed_hint,
-                       R.string.opt_mod_speed_hint};
+                       R.string.opt_mod_speed_hint, R.string.opt_mod_ff_hint, R.string.opt_mod_ff_hint};
         for (int i = 0; i < MainActivity.MODS.length; i++) {
             String key = MainActivity.MODS[i];
             toggle(labels[i], hints[i], a.prefs.getBoolean(key, false), on -> a.setMod(key, on));

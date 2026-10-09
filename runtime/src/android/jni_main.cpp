@@ -14,6 +14,8 @@
 
 #include "../audio_out.h"
 #include "../disc/wud.h"
+#include "../disc/wua.h"
+#include "../crash_info.h"
 #include "../gx2/gx2.h"
 #include "../input.h"
 #include "../mods/climb.h"
@@ -151,6 +153,11 @@ JNI_FN(jstring, gameRelease)(JNIEnv* env, jclass, jstring gameDir) {
     return env->NewStringUTF(r);
 }
 
+// the crash log's context from the app ("app": version, device, settings), see crash_info.h
+JNI_FN(void, setCrashInfo)(JNIEnv* env, jclass, jstring section, jstring text) {
+    crash_info::set(jstr(env, section), jstr(env, text));
+}
+
 // the licenses of everything in the APK (assembled by CMakeLists.txt)
 extern "C" const char wwhd_licenses[], wwhd_licenses_end[];
 JNI_FN(jstring, licenses)(JNIEnv* env, jclass) {
@@ -213,6 +220,26 @@ JNI_FN(jstring, extractGame)(JNIEnv* env, jclass, jint fd, jbyteArray discKey, j
     }
     close(fd);
     if (!ok) LOG("[disc] extraction failed: %s", err.c_str());
+    return ok ? nullptr : env->NewStringUTF(err.c_str());
+}
+// the same for a Cemu .wua archive (decrypted: no keys)
+JNI_FN(jstring, extractArchive)(JNIEnv* env, jclass, jint fd, jstring outDir) {
+    g_extract_done = 0;
+    g_extract_total = 0;
+    g_extract_cancel = false;
+    disc::Archive wua;
+    std::string err;
+    bool ok = wua.open(fd, err);
+    if (ok) {
+        LOG("[wua] title %s, %zu files", wua.title_id().c_str(), wua.files().size());
+        ok = wua.extract(jstr(env, outDir), [](uint64_t done, uint64_t total, const std::string&) {
+            g_extract_done = done;
+            g_extract_total = total;
+            return !g_extract_cancel.load();
+        }, err);
+    }
+    close(fd);
+    if (!ok) LOG("[wua] extraction failed: %s", err.c_str());
     return ok ? nullptr : env->NewStringUTF(err.c_str());
 }
 JNI_FN(jlongArray, extractProgress)(JNIEnv* env, jclass) {
@@ -440,6 +467,7 @@ JNI_FN(jintArray, hudState)(JNIEnv* env, jclass) {
 // settings shown in the app's menu
 JNI_FN(void, setOption)(JNIEnv* env, jclass, jstring name, jint value) {
     std::string n = jstr(env, name);
+    if (n != "capture") crash_info::option(n, value);
     if (n == "ao_mode") gfx::set_ao_mode(value);
     else if (n == "ao_hires") gfx::set_ao_hires(value != 0);
     else if (n == "aniso") gfx::set_aniso(value != 0);
@@ -465,6 +493,8 @@ JNI_FN(void, setOption)(JNIEnv* env, jclass, jstring name, jint value) {
     else if (n == "mod_climb") mods::set_climb_enabled(value != 0);
     else if (n == "mod_quick_doors") mods::set_quick_doors(value != 0);
     else if (n == "mod_fast_scenes") mods::set_fast_scenes(value != 0);
+    else if (n == "mod_ff_cutscenes") mods::set_ff_cutscenes(value != 0);
+    else if (n == "mod_ff_dialogues") mods::set_ff_dialogues(value != 0);
     else if (n == "mod_run_speed") mods::set_run_speed(value / 100.0f);
     else if (n == "mod_run_mode") mods::set_run_mode(value);
     else if (n == "mod_swim_mode") mods::set_swim_mode(value);
@@ -488,6 +518,8 @@ JNI_FN(jint, getOption)(JNIEnv* env, jclass, jstring name) {
     if (n == "mod_climb") return mods::climb_enabled();
     if (n == "mod_quick_doors") return mods::quick_doors();
     if (n == "mod_fast_scenes") return mods::fast_scenes();
+    if (n == "mod_ff_cutscenes") return mods::ff_cutscenes();
+    if (n == "mod_ff_dialogues") return mods::ff_dialogues();
     if (n == "mod_run_speed") return (int)lroundf(mods::run_speed() * 100);
     if (n == "mod_run_mode") return mods::run_mode();
     if (n == "mod_swim_mode") return mods::swim_mode();
