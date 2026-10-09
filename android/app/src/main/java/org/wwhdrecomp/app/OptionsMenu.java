@@ -477,6 +477,11 @@ final class OptionsMenu extends Dialog {
             a.prefs.edit().putInt("layout", i).apply();
             a.updateLayout();
         });
+        submenu(R.string.opt_hud, R.string.opt_hud_hint, a.getString(a.hudMoved() ? R.string.opt_buttons_custom : R.string.opt_buttons_default),
+                () -> {
+                    dismiss();  // the game, with the editor over it
+                    a.editHud();
+                });
         choice(R.string.opt_ao, 0, a.getResources().getStringArray(R.array.ao_modes), Native.getOption("ao_mode"), a::setAo);
         toggle(R.string.opt_ao_hires, 0, Native.getOption("ao_hires") != 0, on -> a.setBool("ao_hires", on));
         toggle(R.string.opt_aniso, 0, Native.getOption("aniso") != 0, on -> a.setBool("aniso", on));
@@ -643,8 +648,6 @@ final class OptionsMenu extends Dialog {
             a.prefs.edit().putFloat("controls_scale", MainActivity.CONTROL_SIZES[i]).apply();
             a.applyControlsAppearance();
         });
-        submenu(R.string.opt_hud, R.string.opt_hud_hint, a.getString(a.hudMoved() ? R.string.opt_buttons_custom : R.string.opt_buttons_default),
-                () -> openPage(this::hudPage));
         submenu(R.string.opt_layout_edit, R.string.opt_layout_edit_hint, "", () -> {
             dismiss();
             a.editTouchLayout();
@@ -682,31 +685,6 @@ final class OptionsMenu extends Dialog {
         submenu(R.string.opt_buttons, R.string.opt_buttons_hint,
                 a.getString(a.inputMapper().isDefaultMap() ? R.string.opt_buttons_default : R.string.opt_buttons_custom),
                 () -> openPage(this::buttonsPage));
-    }
-
-    // the game's HUD parts moved by the player (aspect.cpp): a horizontal and a vertical offset each
-    private void hudPage() {
-        pageTitle(R.string.opt_hud);
-        note(a.getString(R.string.opt_hud_note));
-        String[] parts = a.getResources().getStringArray(R.array.hud_parts);
-        for (int p = 0; p < parts.length; p++) {
-            final int part = p;
-            for (int axis = 0; axis < 2; axis++) {
-                final int ax = axis;
-                int range = axis == 0 ? MainActivity.HUD_RANGE_X : MainActivity.HUD_RANGE_Y;
-                int n = 2 * range / MainActivity.HUD_STEP + 1;
-                String[] vals = new String[n];
-                for (int i = 0; i < n; i++) {
-                    int v = -range + i * MainActivity.HUD_STEP;
-                    vals[i] = v == 0 ? a.getString(R.string.opt_hud_default) : (v > 0 ? "+" : "") + v;
-                }
-                int cur = (a.hudOffset(part, axis) + range) / MainActivity.HUD_STEP;
-                if (axis == 1) indentNext = true;
-                choice(axis == 0 ? parts[p] : a.getString(R.string.opt_hud_vertical), axis == 0 ? a.getString(R.string.opt_hud_horizontal) : null,
-                        vals, Math.max(0, Math.min(n - 1, cur)), i -> a.setHudOffset(part, ax, -range + i * MainActivity.HUD_STEP));
-            }
-        }
-        submenu(R.string.opt_hud_reset, 0, "", () -> { a.resetHud(); fill(); });
     }
 
     // controller buttons: each Wii U button and the controller button that presses it

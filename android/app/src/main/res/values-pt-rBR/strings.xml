@@ -34,13 +34,12 @@
     <string name="ptbr_off_restart">A tradução está desativada. Reinicie o jogo para aplicar.</string>
     <string name="opt_camera_stick">Analógico da câmera</string>
     <string name="opt_camera_stick_hint">Um analógico à direita que gira a câmera (mova-o em Editar controles de toque). Deslizar o dedo no lado direito continua funcionando</string>
-    <string name="opt_hud">Posições do HUD</string>
-    <string name="opt_hud_hint">Mova os corações, rupias, botões e o resto do HUD do jogo</string>
-    <string name="opt_hud_note">Cada parte do HUD do jogo pode ser movida para a esquerda ou direita e para cima ou baixo (na imagem de 1280 x 720 do jogo). Feche o menu para ver o resultado; as partes só aparecem onde o jogo as mostra.</string>
-    <string name="opt_hud_horizontal">Horizontal (− esquerda, + direita)</string>
-    <string name="opt_hud_vertical">Vertical (− cima, + baixo)</string>
-    <string name="opt_hud_default">Padrão</string>
-    <string name="opt_hud_reset">Restaurar todas as posições do HUD</string>
+    <string name="opt_hud">Layout do HUD</string>
+    <string name="opt_hud_hint">Mova, redimensione ou esconda os corações, rupias, botões e o resto do HUD do jogo</string>
+    <string name="hud_hidden">oculto</string>
+    <string name="hud_hide_all">Ocultar HUD</string>
+    <string name="hud_show_all">Mostrar HUD</string>
+    <string name="hud_edit_hint">Toque numa parte · arraste para mover · alça no canto ou pinça para redimensionar · 🗑 oculta, + mostra · ↺ restaura · ✓ ou Voltar para terminar</string>
     <string-array name="hud_parts">
         <item>Corações e magia</item>
         <item>Rupias</item>

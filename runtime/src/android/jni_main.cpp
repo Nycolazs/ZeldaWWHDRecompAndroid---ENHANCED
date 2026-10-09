@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "../audio_out.h"
+#include "../aspect.h"
 #include "../disc/wua.h"
 #include "../disc/wud.h"
 #include "../gx2/gx2.h"
@@ -263,7 +264,6 @@ extern "C" const char wwhd_ops_bc[], wwhd_ops_bc_end[], wwhd_hooks[], wwhd_hooks
 
 #ifdef WWHD_DEVICE_RECOMP
 #include "../recomp/loader.h"
-#include "../aspect.h"
 #endif
 
 static std::atomic<size_t> g_compile_done{0}, g_compile_total{0};
@@ -464,6 +464,15 @@ JNI_FN(jintArray, hudState)(JNIEnv* env, jclass) {
     return a;
 }
 
+// the HUD editor: where each part was drawn (aspect::hud_bounds)
+JNI_FN(jfloatArray, hudBounds)(JNIEnv* env, jclass) {
+    float v[aspect::kHudParts * 4 + 2];
+    aspect::hud_bounds(v);
+    jfloatArray a = env->NewFloatArray(aspect::kHudParts * 4 + 2);
+    env->SetFloatArrayRegion(a, 0, aspect::kHudParts * 4 + 2, v);
+    return a;
+}
+
 // settings shown in the app's menu
 JNI_FN(void, setOption)(JNIEnv* env, jclass, jstring name, jint value) {
     std::string n = jstr(env, name);
@@ -479,6 +488,10 @@ JNI_FN(void, setOption)(JNIEnv* env, jclass, jstring name, jint value) {
     else if (n == "fps_mode") fps60::set_mode(value);
     else if (n == "drawdone_mode") gx2::set_drawdone_mode(value);
     else if (n == "core_mode") platform::set_core_mode(value);
+    // the HUD editor: "hud_<part>_s" size percent (negative: hidden), "hud_refresh"
+    else if (n.size() > 6 && n.rfind("hud_", 0) == 0 && n.back() == 's')
+        aspect::set_hud_scale(atoi(n.c_str() + 4), value < 0 ? -value : value, value < 0);
+    else if (n == "hud_refresh") aspect::refresh_hud();
     // the player's HUD positions (aspect.cpp): "hud_<part>_x" / "hud_<part>_y", layout pixels
     else if (n.size() > 6 && n.rfind("hud_", 0) == 0 && (n.back() == 'x' || n.back() == 'y')) {
         int part = atoi(n.c_str() + 4);

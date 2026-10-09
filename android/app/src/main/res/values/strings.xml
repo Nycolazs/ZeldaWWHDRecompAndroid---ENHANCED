@@ -36,13 +36,12 @@
     <string name="ptbr_off_restart">The translation is off. Restart the game to apply.</string>
     <string name="opt_camera_stick">Camera stick</string>
     <string name="opt_camera_stick_hint">A stick on the right that turns the camera (move it in Edit touch layout). Swiping the right side still works</string>
-    <string name="opt_hud">HUD positions</string>
-    <string name="opt_hud_hint">Move the hearts, rupees, buttons and the rest of the game\'s HUD</string>
-    <string name="opt_hud_note">Each part of the game\'s HUD can be moved left or right and up or down (in the game\'s 1280 x 720 picture). Close the menu to see the result; parts appear only where the game shows them.</string>
-    <string name="opt_hud_horizontal">Horizontal (− left, + right)</string>
-    <string name="opt_hud_vertical">Vertical (− up, + down)</string>
-    <string name="opt_hud_default">Default</string>
-    <string name="opt_hud_reset">Reset all HUD positions</string>
+    <string name="opt_hud">HUD layout</string>
+    <string name="opt_hud_hint">Move, resize or hide the hearts, rupees, buttons and the rest of the game\'s HUD</string>
+    <string name="hud_hidden">hidden</string>
+    <string name="hud_hide_all">Hide HUD</string>
+    <string name="hud_show_all">Show HUD</string>
+    <string name="hud_edit_hint">Touch a part · drag to move · corner handle or pinch to resize · 🗑 hides it, + shows it · ↺ resets · ✓ or Back to finish</string>
     <string-array name="hud_parts">
         <item>Hearts and magic</item>
         <item>Rupees</item>

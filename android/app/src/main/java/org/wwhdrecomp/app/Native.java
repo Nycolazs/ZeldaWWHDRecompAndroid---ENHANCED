@@ -19,6 +19,8 @@ final class Native {
     static native String extractArchive(int fd, String outDir);
     /** A mod folder whose content/ files replace the game's (before start; "" = none). */
     static native void setContentOverlay(String dir);
+    /** The HUD editor: per part {left, bottom, right, top} in layout units (NaN: not drawn yet), then kx, ky. */
+    static native float[] hudBounds();
     /** {bytes written, total} of the running extraction. */
     static native long[] extractProgress();
     static native void extractCancel();

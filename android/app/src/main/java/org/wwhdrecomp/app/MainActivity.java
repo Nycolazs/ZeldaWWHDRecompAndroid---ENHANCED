@@ -609,10 +609,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         Native.setOption("fps_mode", prefs.getBoolean("fg_enabled", false) ? 0 : savedFpsMode());
         Native.setOption("drawdone_mode", prefs.getInt("drawdone_mode", 0));
         Native.setOption("core_mode", prefs.getInt("core_mode", MainActivity.DEFAULT_CORE_MODE));
-        for (int p = 0; p < HUD_PARTS; p++) {
-            Native.setOption("hud_" + p + "_x", hudOffset(p, 0));
-            Native.setOption("hud_" + p + "_y", hudOffset(p, 1));
-        }
+        for (int p = 0; p < HUD_PARTS; p++) sendHud(p);
         for (String k : new String[] {"inf_health", "inf_magic", "inf_ammo"}) Native.setOption(k, prefs.getBoolean(k, false) ? 1 : 0);
         for (String m : MODS) Native.setOption(m, prefs.getBoolean(m, false) ? 1 : 0);
         Native.setOption("mod_camera_speed", prefs.getInt("mod_camera_speed", 100));
@@ -738,6 +735,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                 drc = inset;
                 break;
         }
+        lastTvRect = new RectF(tv);
         Native.setLayout(new float[] {tv.left, tv.top, tv.width(), tv.height()},
                 drc == null ? null : new float[] {drc.left, drc.top, drc.width(), drc.height()}, drc != null);
         controls.setDrcRect(drc == null ? null : fit(drc, DRC_ASPECT));
@@ -961,6 +959,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
+        if (hudEditor != null && e.getKeyCode() == KeyEvent.KEYCODE_BACK) {  // Back closes the HUD editor
+            if (e.getAction() == KeyEvent.ACTION_UP) closeHudEditor();
+            return true;
+        }
         if (!started) return super.dispatchKeyEvent(e);
         int code = e.getKeyCode();
         boolean controller = InputMapper.isController(e.getDevice()) || KeyEvent.isGamepadButton(code);
@@ -1574,28 +1576,68 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     // the game thread on the prime core, the renderer on the performance cores: on a Galaxy S20 FE
     // (no ADPF) Outset went from 30 to 40-46 fps at 60 fps mode against letting the system place them
     static final int DEFAULT_CORE_MODE = 3;
-    // the HUD positions (aspect.cpp): offsets in the game's 1280x720 layout pixels
-    static final int HUD_PARTS = 5, HUD_STEP = 20, HUD_RANGE_X = 400, HUD_RANGE_Y = 240;
+    // the HUD layout (aspect.cpp, HudEditor): per part an offset in the game's layout pixels (x right,
+    // y down), a size in percent and whether it is shown
+    static final int HUD_PARTS = 5;
 
-    int hudOffset(int part, int axis) { return prefs.getInt("hud_" + part + (axis == 0 ? "_x" : "_y"), 0); }
+    public int hudOffset(int part, int axis) { return prefs.getInt("hud_" + part + (axis == 0 ? "_x" : "_y"), 0); }
+    public int hudScale(int part) { return prefs.getInt("hud_" + part + "_s", 100); }
+    public boolean hudHidden(int part) { return prefs.getBoolean("hud_" + part + "_h", false); }
 
-    void setHudOffset(int part, int axis, int v) {
-        String k = "hud_" + part + (axis == 0 ? "_x" : "_y");
-        prefs.edit().putInt(k, v).apply();
-        Native.setOption(k, v);
+    public void setHud(int part, int dx, int dy, int scale, boolean hidden) {
+        prefs.edit().putInt("hud_" + part + "_x", dx).putInt("hud_" + part + "_y", dy).putInt("hud_" + part + "_s", scale)
+                .putBoolean("hud_" + part + "_h", hidden).apply();
+        sendHud(part);
+    }
+
+    private void sendHud(int p) {
+        Native.setOption("hud_" + p + "_x", hudOffset(p, 0));
+        Native.setOption("hud_" + p + "_y", hudOffset(p, 1));
+        Native.setOption("hud_" + p + "_s", hudHidden(p) ? -hudScale(p) : hudScale(p));
     }
 
     boolean hudMoved() {
         for (int p = 0; p < HUD_PARTS; p++)
-            if (hudOffset(p, 0) != 0 || hudOffset(p, 1) != 0) return true;
+            if (hudOffset(p, 0) != 0 || hudOffset(p, 1) != 0 || hudScale(p) != 100 || hudHidden(p)) return true;
         return false;
     }
 
+    private HudEditor hudEditor;
+    private RectF lastTvRect = new RectF();
+
+    /** where the TV picture is on screen (the editor maps the game's layout space onto it) */
+    public RectF tvPicture() {
+        RectF r = lastTvRect.isEmpty() ? new RectF(0, 0, surfaceW, surfaceH) : new RectF(lastTvRect);
+        // 16:9 with bars: the picture in the middle; stretched, filled or the screen's shape: the whole rect
+        if (prefs.getInt("render_aspect", 0) == 0 && prefs.getInt("tv_aspect", 0) == 0) r = fit(r, TV_ASPECT);
+        return r;
+    }
+
+    void editHud() {
+        if (hudEditor != null || controls == null) return;
+        android.view.ViewGroup root = (android.view.ViewGroup) controls.getParent();
+        hudEditor = new HudEditor(this, new HudEditor.Host() {
+            @Override public int hudOffset(int part, int axis) { return MainActivity.this.hudOffset(part, axis); }
+            @Override public int hudScale(int part) { return MainActivity.this.hudScale(part); }
+            @Override public boolean hudHidden(int part) { return MainActivity.this.hudHidden(part); }
+            @Override public void setHud(int part, int dx, int dy, int scale, boolean hidden) { MainActivity.this.setHud(part, dx, dy, scale, hidden); }
+            @Override public RectF tvPicture() { return MainActivity.this.tvPicture(); }
+            @Override public void closeHudEditor() { MainActivity.this.closeHudEditor(); }
+        });
+        controls.setVisibility(View.INVISIBLE);
+        root.addView(hudEditor, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        Native.setOption("hud_refresh", 1);
+    }
+
+    void closeHudEditor() {
+        if (hudEditor == null) return;
+        ((android.view.ViewGroup) hudEditor.getParent()).removeView(hudEditor);
+        hudEditor = null;
+        if (controls != null) controls.setVisibility(View.VISIBLE);
+    }
+
     void resetHud() {
-        for (int p = 0; p < HUD_PARTS; p++) {
-            setHudOffset(p, 0, 0);
-            setHudOffset(p, 1, 0);
-        }
+        for (int p = 0; p < HUD_PARTS; p++) setHud(p, 0, 0, 100, false);
     }
     // the menus' size, on top of fitting them to the screen (GameUi.fitted)
     static final float[] MENU_SIZES = {0.7f, 0.8f, 0.9f, 1f, 1.15f, 1.3f};
