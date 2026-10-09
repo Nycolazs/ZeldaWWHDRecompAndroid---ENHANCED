@@ -2,6 +2,17 @@
 <resources>
     <string name="setup_text">Os arquivos do jogo não foram encontrados ou não correspondem a esta versão.\n\nEste app contém apenas o código recompilado a partir da sua própria cópia do jogo; ele precisa dos arquivos extraídos do mesmo dump. Extraia-os num computador (veja README.md: tools/wudextract.py) e copie a pasta resultante (com code/, content/ e meta/ dentro) para:\n\n%1$s\n\nPor exemplo: adb push game /sdcard/Android/data/org.wwhdrecomp.app/files/\n\nProblema: %2$s</string>
     <string name="touch_skip">Pular</string>
+    <string name="opt_bloom">Intensidade do bloom</string>
+    <string name="opt_bloom_hint">Brilho em volta das áreas claras. 100% é igual ao jogo original</string>
+    <string name="opt_mod_ff_cutscenes">Acelerar cutscenes</string>
+    <string name="opt_mod_ff_dialogues">Acelerar diálogos</string>
+    <string name="opt_mod_ff_hint">Mais rápido (até 4×, o quanto este aparelho conseguir desenhar) enquanto o ZR (R2) estiver apertado; as caixas de texto ainda esperam o seu botão</string>
+    <string name="crash_title">O jogo fechou inesperadamente</string>
+    <string name="crash_text">Um registro do travamento foi salvo. Se você relatar o problema (por exemplo como uma issue no GitHub), anexe-o. Ele mostra onde o jogo travou, a versão do app, a versão do jogo, o modelo do seu aparelho e as configurações em uso. Ele não contém dados pessoais.</string>
+    <string name="crash_share">Compartilhar registro do travamento</string>
+    <string name="crash_share_all">Compartilhar registros de travamento</string>
+    <string name="crash_not_now">Agora não</string>
+    <string name="crash_subject">Registro de travamento do Wind Waker HD</string>
     <string name="motion_source_pad">Agora: os sensores de %1$s</string>
     <string name="motion_source_device">Agora: os sensores deste aparelho</string>
     <string name="motion_source_device_no_pad">Agora: os sensores deste aparelho (o controle em uso não informa nenhum)</string>

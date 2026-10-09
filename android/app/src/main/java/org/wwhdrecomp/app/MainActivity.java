@@ -58,6 +58,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
     private static final float TV_ASPECT = 16f / 9f, DRC_ASPECT = 854f / 480f;
 
     SharedPreferences prefs;
+    // held here: SharedPreferences keeps its listeners only weakly
+    private final SharedPreferences.OnSharedPreferenceChangeListener crashInfoUpdater = (p, key) -> CrashLogs.updateInfo(this, p);
     private SurfaceView surface;
     private ControlsView controls;
     private final InputMapper mapper = new InputMapper();
@@ -106,13 +108,18 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
             setenv("WWHD_RES_SCALE", prefs.getString("res_scale", "1"));  // wwhd.env / intent extras below override
             setenv("WWHD_LANGUAGE", gameLanguage());
             applyFrameGenSettings();
+            setenv("WWHD_APP_VERSION", CrashLogs.appVersion(this));  // the crash log's name
             gpuSafeAtStart();
             applyEnvironment();
+            CrashLogs.deleteShared(this, prefs);  // shared in an earlier run
             // a shader dump (WWHD_DUMP_SHADERS=<files>/shaders, debugging) left from an earlier start
             if (Os.getenv("WWHD_DUMP_SHADERS") == null) Backup.deleteTree(new File(baseDir(), "shaders"));
             System.loadLibrary("wwhd");
             libraryLoaded = true;
         }
+        // the crash log's app section, kept current while settings change
+        CrashLogs.updateInfo(this, prefs);
+        prefs.registerOnSharedPreferenceChangeListener(crashInfoUpdater);
         if (started) showGame();
         else checkAndStart();
     }
@@ -361,6 +368,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         if (failedDriver != null)
             new GameDialog(this).title(R.string.opt_gpu_driver).message(getString(R.string.gpu_driver_failed, failedDriver))
                     .button(R.string.opt_ok, null).show();
+        else CrashLogs.offerNew(this, prefs);  // the last run crashed
     }
 
     // ------------------------------------------------------------------ GPU driver (Adreno)
@@ -601,6 +609,7 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     private void applyOptions() {
         Native.setOption("ao_mode", prefs.getInt("ao_mode", Native.getOption("ao_mode")));
+        Native.setOption("bloom_strength", prefs.getInt("bloom_strength", 100));
         Native.setOption("ao_hires", prefs.getBoolean("ao_hires", Native.getOption("ao_hires") != 0) ? 1 : 0);
         Native.setOption("aniso", prefs.getBoolean("aniso", Native.getOption("aniso") != 0) ? 1 : 0);
         Native.setOption("pro_controller", prefs.getBoolean("pro_controller", Native.getOption("pro_controller") != 0) ? 1 : 0);
@@ -1210,7 +1219,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     // ------------------------------------------------------------------ gameplay mods
     // optional changes to how the game plays (runtime/src/mods), all off by default
-    static final String[] MODS = {"mod_direct_camera", "mod_first_person", "mod_climb", "mod_quick_doors", "mod_fast_scenes"};
+    static final String[] MODS = {"mod_direct_camera", "mod_first_person", "mod_climb", "mod_quick_doors", "mod_fast_scenes",
+                                   "mod_ff_cutscenes", "mod_ff_dialogues"};
     static final int[] CAMERA_SPEEDS = {50, 100, 150, 200};
     static final int[] RUN_SPEEDS = {100, 125, 150, 200, 250, 300, 400};  // 100: off
 
@@ -1228,8 +1238,8 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
 
     // ------------------------------------------------------------------ game from a disc image
     // The user picks a folder holding their .wux/.wud image, its disc key (same name, .key) and
-    // the console's common key (common.key), or a .wua archive (Cemu's format, already decrypted:
-    // no keys); the game is extracted into files/game on the device.
+    // the console's common key (common.key), or a Cemu .wua archive (decrypted: no keys; used
+    // first); the game is extracted into files/game on the device.
     private void startExtraction(android.net.Uri tree) {
         android.content.ContentResolver cr = getContentResolver();
         android.net.Uri image = null, discKey = null, commonKey = null, archive = null;
@@ -1254,46 +1264,30 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
                 }
             }
         }
-        if (archive != null) {  // needs no keys
-            int fd;
-            try {
-                android.os.ParcelFileDescriptor pfd = cr.openFileDescriptor(archive, "r");
-                if (pfd == null) throw new IOException("cannot open the archive");
-                fd = pfd.detachFd();
-            } catch (IOException e) {
-                new AlertDialog.Builder(this).setTitle(R.string.setup_extract).setMessage(e.getMessage())
-                        .setPositiveButton(android.R.string.ok, null).show();
-                return;
-            }
-            if (!enoughSpace(baseDir(), 2000L << 20)) {
-                try {
-                    android.os.ParcelFileDescriptor.adoptFd(fd).close();
-                } catch (IOException ignored) {
-                }
-                return;
-            }
-            runExtraction(fd, null, null);
-            return;
-        }
         if (image != null)
             for (String[] k : keys)  // the disc key: the image's name with .key, else the only other key
                 if (k[0].substring(0, k[0].length() - 4).equalsIgnoreCase(imageName))
                     discKey = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, k[1]);
         if (discKey == null && keys.size() == 1)
             discKey = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, keys.get(0)[1]);
-        if (image == null || discKey == null || commonKey == null) {
+        if (archive != null) {
+            image = archive;
+            discKey = commonKey = null;
+        } else if (image == null || discKey == null || commonKey == null) {
             new AlertDialog.Builder(this).setTitle(R.string.setup_extract)
                     .setMessage(getString(R.string.extract_missing, image == null ? "✗" : "✓", discKey == null ? "✗" : "✓",
                             commonKey == null ? "✗" : "✓"))
                     .setPositiveButton(android.R.string.ok, null).show();
             return;
         }
-        byte[] dk, ck;
+        byte[] dk = null, ck = null;
         int fd;
         try {
-            dk = Native.parseKey(readAll(cr, discKey));
-            ck = Native.parseKey(readAll(cr, commonKey));
-            if (dk == null || ck == null) throw new IOException(getString(R.string.extract_bad_key));
+            if (archive == null) {
+                dk = Native.parseKey(readAll(cr, discKey));
+                ck = Native.parseKey(readAll(cr, commonKey));
+                if (dk == null || ck == null) throw new IOException(getString(R.string.extract_bad_key));
+            }
             android.os.ParcelFileDescriptor pfd = cr.openFileDescriptor(image, "r");
             if (pfd == null) throw new IOException("cannot open the image");
             fd = pfd.detachFd();
@@ -1322,14 +1316,14 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         }
     }
 
-    /** dk and ck null: fd is a .wua archive */
+    // dk == null: fd is a .wua archive
     private void runExtraction(int fd, byte[] dk, byte[] ck) {
         File base = baseDir(), work = new File(base, "game-extracting"), game = new File(gameDir());
         askNotifications();
         boolean ok = WorkService.Work.start(this, WorkService.Work.EXTRACT, () -> {
             Backup.deleteTree(work);
             String err = dk == null ? Native.extractArchive(fd, work.getAbsolutePath())
-                    : Native.extractGame(fd, dk, ck, work.getAbsolutePath());
+                                    : Native.extractGame(fd, dk, ck, work.getAbsolutePath());
             if (err == null) {  // complete: swap it in for the old game folder
                 Backup.deleteTree(game);
                 if (!work.renameTo(game)) err = "cannot move the extracted files into place";
@@ -1446,7 +1440,10 @@ public final class MainActivity extends Activity implements SurfaceHolder.Callba
         t.setTextIsSelectable(true);
         t.setText(Native.licenses());
         android.text.util.Linkify.addLinks(t, android.text.util.Linkify.WEB_URLS);
-        new GameDialog(this).title(R.string.menu_about).content(t).button(R.string.opt_ok, null).show();
+        GameDialog d = new GameDialog(this).title(R.string.menu_about).content(t);
+        java.util.List<File> logs = CrashLogs.list(this, prefs);
+        d.button(R.string.crash_share_all, () -> CrashLogs.share(this, prefs, logs), !logs.isEmpty());
+        d.button(R.string.opt_ok, null).show();
     }
 
     private void showCompileStopped(String message) {

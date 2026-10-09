@@ -643,6 +643,9 @@ extern "C" void hook_0256A388(Cpu* c) { kankyo_move(c, kStar, f_0256A388_orig); 
 // switches buffers and simulates one step into the new one, so the other buffer holds the previous
 // step. The vertex fill (0251D864, from the cloth's draw, every pass) copies the current buffers
 // into the vertex buffer; on logic passes after a simulation step it gets the halfway grid.
+// The buffers are read in place (guest memory, big-endian words): wf/fw, not the host-order hf/fh
+// (blending byte-swapped words turned every moving vertex into garbage: issue #36, the Rito flags on
+// Dragon Roost Island drawn as huge stretched polygons on every in-between frame).
 constexpr uint32_t kClothFly = 0x98, kClothHoist = 0x9C, kClothPos = 0xB0, kClothCur = 0x1C0;
 std::unordered_map<uint32_t, uint8_t> g_cloth_cur;  // buffer index seen at the cloth's last fill
 extern "C" void hook_0251D864(Cpu* c) {
@@ -667,9 +670,9 @@ extern "C" void hook_0251D864(Cpu* c) {
         saved.emplace_back(now, std::vector<uint32_t>(b, b + n));
         if (tr && arr == 0) {
             tr--;
-            LOG("[interp-fx] cloth %08X vertex 0 x %.3f -> %.3f, halfway %.3f", pk, hf(a[0]), hf(b[0]), 0.5f * (hf(a[0]) + hf(b[0])));
+            LOG("[interp-fx] cloth %08X vertex 0 x %.3f -> %.3f, halfway %.3f", pk, wf(a[0]), wf(b[0]), 0.5f * (wf(a[0]) + wf(b[0])));
         }
-        for (uint32_t q = 0; q < n; q++) b[q] = fh(0.5f * (hf(a[q]) + hf(b[q])));
+        for (uint32_t q = 0; q < n; q++) b[q] = fw(0.5f * (wf(a[q]) + wf(b[q])));
     }
     f_0251D864_orig(c);
     for (auto& [addr, w] : saved) memcpy(ppc_ptr(addr), w.data(), 4 * w.size());

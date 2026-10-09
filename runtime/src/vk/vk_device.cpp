@@ -32,6 +32,7 @@ namespace interp { bool mode40(); }  // interp.cpp: 40 fps needs the panel at 12
 namespace gfx {
 Renderer R;
 namespace { void count_present(); }
+static std::atomic<bool> g_fast_forward{false};  // set_fast_forward: no generated frames
 
 const char* backend_name() { return "Vulkan"; }
 uint64_t current_frame() { return R.frame; }
@@ -554,7 +555,7 @@ void wait_idle() {
 
 // GX2DrawDone. The game waits here before reusing memory the GPU reads, or to read what it wrote.
 // This renderer copies all guest data (vertices, uniforms, textures) when commands are recorded and
-// never writes results back to guest memory, so once the render thread has processed the commands
+// writes results back to guest memory only for linear surfaces (write_back_linear), so once the render thread has processed the commands
 // (the caller syncs with it) there is nothing left to wait for. Waiting for the GPU as well would
 // serialize CPU and GPU: WWHD calls this twice a frame, which kept the GPU half idle and at its
 // lowest clock. Frame pacing still waits for finished frames (flips). WWHD_STRICT_DRAWDONE=1 waits.
@@ -562,6 +563,7 @@ void draw_done() {
     static const bool strict = getenv("WWHD_STRICT_DRAWDONE") != nullptr;
     if (strict) wait_idle();
     else submit();
+    write_back_linear();  // except what the CPU reads: linear targets (the Picto Box picture, issue #22)
 }
 
 // ---------------------------------------------------------------- image layouts
@@ -1884,7 +1886,8 @@ bool present_frame_fg() {
         if (d > 0.004 && d < 0.2) interval += (d - interval) * 0.1;
     }
     last = now;
-    bool generate = fg::config().multiplier / interval <= hz * 1.1;
+    // fast forward (mods/turbo.cpp): game frames only, the game's own frame rate is the point
+    bool generate = fg::config().multiplier / interval <= hz * 1.1 && !g_fast_forward.load(std::memory_order_relaxed);
 
     if (R.tv.img.image) prepare(R.tv.img, Use::SAMPLED);
     if (R.drc.img.image) prepare(R.drc.img, Use::SAMPLED);
@@ -1930,6 +1933,8 @@ bool present_frame_fg() {
     return true;
 }
 }  // namespace
+
+void set_fast_forward(bool on) { g_fast_forward.store(on, std::memory_order_relaxed); }
 
 void set_window(ANativeWindow* w) {
     std::lock_guard<std::mutex> wl(g_window_mutex);

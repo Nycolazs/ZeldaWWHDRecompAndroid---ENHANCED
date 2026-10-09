@@ -410,12 +410,16 @@ static std::mutex g_vclock_mutex;
 static int64_t g_vclock_base_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 static uint64_t g_vclock_base_index = 0, g_vclock_last = 0;
 static int64_t g_vclock_period = kVsyncPeriod;
+// fast forward (mods/turbo.cpp): the clock runs g_vclock_rate times as fast, so the game flips more
+// often and plays more frames per second, every one calculated and drawn as usual
+static double g_vclock_rate = 1.0;
+static int64_t vclock_period() { return g_vclock_rate == 1.0 ? g_vclock_period : (int64_t)(g_vclock_period / g_vclock_rate); }
 static int64_t steady_ns() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 static uint64_t vclock_index(int64_t t) {  // g_vclock_mutex held
     int64_t d = t - g_vclock_base_ns;
-    uint64_t i = g_vclock_base_index + (d > 0 ? (uint64_t)(d / g_vclock_period) : 0);
+    uint64_t i = g_vclock_base_index + (d > 0 ? (uint64_t)(d / vclock_period()) : 0);
     return g_vclock_last = std::max(i, g_vclock_last);  // re-phasing never moves it back
 }
 // a flip also waits for the GPU to finish that frame, as on hardware: the game reuses a frame's
@@ -436,7 +440,7 @@ static uint64_t vsync_index() {
 static std::chrono::steady_clock::time_point next_vsync_time() {
     std::lock_guard<std::mutex> lk(g_vclock_mutex);
     uint64_t next = vclock_index(steady_ns()) + 1;
-    int64_t t = g_vclock_base_ns + (int64_t)(next - g_vclock_base_index) * g_vclock_period;
+    int64_t t = g_vclock_base_ns + (int64_t)(next - g_vclock_base_index) * vclock_period();
     return std::chrono::steady_clock::time_point(std::chrono::nanoseconds(t));
 }
 
@@ -449,6 +453,7 @@ void gx2_display_vsync(int64_t vsync_ns, int64_t display_period) {
     int64_t n = std::max<int64_t>(1, (target + display_period / 2) / display_period);
     int64_t period = n * display_period;
     std::lock_guard<std::mutex> lk(g_vclock_mutex);
+    if (g_vclock_rate != 1.0) return;  // fast forward: free running until it ends
     if (std::abs(period - target) * 50 > target) {  // e.g. 90 Hz: no multiple near 60 Hz
         if (g_vclock_period != target) {
             int64_t now = steady_ns();
@@ -471,6 +476,17 @@ void gx2_display_vsync(int64_t vsync_ns, int64_t display_period) {
     if (err > display_period / 2) err -= display_period;
     if (std::abs(err) > 250000) g_vclock_base_ns += err;
 }
+
+namespace gx2 {
+void set_clock_rate(double rate) {
+    std::lock_guard<std::mutex> lk(g_vclock_mutex);
+    if (rate == g_vclock_rate) return;
+    int64_t now = steady_ns();
+    g_vclock_base_index = vclock_index(now);
+    g_vclock_base_ns = now;
+    g_vclock_rate = rate;
+}
+}  // namespace gx2
 
 static void update_flips() {  // g_flip_mutex held
     uint64_t now = vsync_index();

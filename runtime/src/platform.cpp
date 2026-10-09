@@ -1,5 +1,6 @@
 // Host OS services: macOS (Mach) and Android/Linux implementations.
 #include "platform.h"
+#include "crash_info.h"
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -348,10 +349,16 @@ void print_backtrace(int fd) {
         Dl_info info{};
         char buf[512];
         int len;
-        if (dladdr(frames[i], &info) && info.dli_fname)
+        uint32_t gf, off;
+        if (crash_info::guest_function((uintptr_t)frames[i], &gf, &off)) {
+            len = snprintf(buf, sizeof buf, "  #%02d %p game function %08X+%#x\n", i, frames[i], gf, off);
+        } else if (dladdr(frames[i], &info) && info.dli_fname) {
+            // the library's name only: Android's install folders have names unique to each install
+            const char* lib = strrchr(info.dli_fname, '/');
             len = snprintf(buf, sizeof buf, "  #%02d %p %s+%#lx (%s)\n", i, frames[i], info.dli_sname ? info.dli_sname : "?",
                            (unsigned long)((uintptr_t)frames[i] - (uintptr_t)(info.dli_saddr ? info.dli_saddr : info.dli_fbase)),
-                           info.dli_fname);
+                           lib ? lib + 1 : info.dli_fname);
+        }
         else
             len = snprintf(buf, sizeof buf, "  #%02d %p\n", i, frames[i]);
 #ifdef __ANDROID__

@@ -1,7 +1,7 @@
 // Optional gameplay mods (Gameplay menu). All off by default; each can be switched live.
 //   camera.cpp  direct right-stick camera, mouse camera, first person on R3 / mouse wheel
 //   mouse.mm    mouse capture in the game window (macOS events)
-//   turbo.cpp   quick doors and fast scene changes (extra logic steps while they run)
+//   turbo.cpp   quick doors, fast scene changes and fast forward (extra logic steps while they run)
 //   cheats.cpp  items, sword/shield, stats, infinite health/magic/ammo, songs, Triforce, dungeon items
 //   mods.cpp    faster running (true60_link.cpp's posMoveFromFootPos site applies it)
 // Test/start-up switches: WWHD_MOD_<NAME>=1 (see mods.cpp).
@@ -40,7 +40,15 @@ int run_mode();
 void set_run_mode(int m);
 int swim_mode();
 void set_swim_mode(int m);
-void run_input(uint32_t buttons);  // filter_pad: the GamePad buttons of this read (L3 edges)
+void run_input(uint32_t buttons);  // filter_pad: the GamePad buttons of this read (L3 edges, ZR)
+// fast forward (turbo.cpp): while ZR is held, cutscenes / dialogues run several logic steps per
+// frame
+bool ff_cutscenes();
+void set_ff_cutscenes(bool on);
+bool ff_dialogues();
+void set_ff_dialogues(bool on);
+bool ff_button();  // ZR is held (last pad read)
+int event_mode_now();  // turbo.cpp: 0 no event, 1 dialogue, 2 / 3 cutscene
 // for daPy_lk_c::posMoveFromFootPos (true60_link.cpp): the factor for Link's horizontal movement
 // this step (run_speed() while he runs, else 1); link = the daPy_lk_c
 float link_move_factor(uint32_t link);

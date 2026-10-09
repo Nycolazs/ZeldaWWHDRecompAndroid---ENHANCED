@@ -63,10 +63,10 @@
     <string name="opt_menu_size">Menu size</string>
     <string name="opt_menu_size_hint">The menus fit the screen on their own; this makes them smaller or larger.</string>
     <string name="setup_retry">Check again</string>
-    <string name="setup_welcome">Welcome!\n\nThis app contains no game files. It plays your own copy of The Legend of Zelda: The Wind Waker HD for Wii U (USA, European or Japanese version).\n\nPut these three files in one folder on this device, then choose that folder:\n•  your disc image (.wux or .wud)\n•  its disc key (the image\'s name with .key)\n•  the console\'s common key (common.key)\n\nOr put just your Wii U archive (.wua, as made by Cemu) in the folder: it needs no keys.\n\nThe app then extracts the game files (about 1.7 GB) and prepares the game code for this device. That happens once and takes a while, depending on the device\'s processor.</string>
+    <string name="setup_welcome">Welcome!\n\nThis app contains no game files. It plays your own copy of The Legend of Zelda: The Wind Waker HD for Wii U (USA, European or Japanese version).\n\nPut these three files in one folder on this device, then choose that folder:\n•  your disc image (.wux or .wud)\n•  its disc key (the image\'s name with .key)\n•  the console\'s common key (common.key)\n\nOr put a Cemu archive of your game (.wua) in a folder; it needs no keys.\n\nThe app then extracts the game files (about 1.7 GB) and prepares the game code for this device. That happens once and takes a while, depending on the device\'s processor.</string>
     <string name="setup_problem">The game files found don\'t work: %1$s</string>
     <string name="setup_extract">Extract from your disc image or .wua…</string>
-    <string name="extract_missing">Choose the folder that holds your Wii U archive (.wua), or your disc image with its disc key and the console\'s common key:\n\n%1$s the image (.wux or .wud)\n%2$s its disc key (the image\'s name with .key)\n%3$s common.key</string>
+    <string name="extract_missing">Choose the folder that holds your disc image, its disc key and the console\'s common key:\n\n%1$s the image (.wux or .wud)\n%2$s its disc key (the image\'s name with .key)\n%3$s common.key\n\nOr a folder that holds a Cemu archive of your game (.wua).</string>
     <string name="extract_bad_key">A key file must hold 16 bytes or 32 hex digits.</string>
     <string name="extract_running">Extracting the game files…</string>
     <string name="extract_detail">%1$d of %2$d MB (%3$.0f MB/s)</string>
@@ -277,6 +277,8 @@
     </string-array>
     <string name="opt_layout">Screen layout</string>
     <string name="opt_ao">Ambient occlusion</string>
+    <string name="opt_bloom">Bloom strength</string>
+    <string name="opt_bloom_hint">Glow around bright areas. 100% matches the original game</string>
     <string name="opt_ao_hires">Full-size occlusion depth</string>
     <string name="opt_aniso">16× anisotropic filtering</string>
     <string name="opt_perf">Performance overlay</string>
@@ -306,6 +308,9 @@
     <string name="opt_mod_quick_doors">Quick doors</string>
     <string name="opt_mod_fast_scenes">Fast scene changes</string>
     <string name="opt_mod_speed_hint">4× speed</string>
+    <string name="opt_mod_ff_cutscenes">Fast forward cutscenes</string>
+    <string name="opt_mod_ff_dialogues">Fast forward dialogues</string>
+    <string name="opt_mod_ff_hint">Faster (up to 4×, as fast as this device draws) while ZR (R2) is held; text boxes still wait for your button</string>
     <string name="opt_mod_run">Faster running</string>
     <string name="opt_mod_run_hint">Link covers more ground while running; jumps and rolls stay as they are</string>
     <string name="opt_mod_swim">Faster swimming</string>
@@ -382,6 +387,12 @@
     <string name="opt_shaders">Delete shader cache</string>
     <string name="opt_shaders_hint">Restarts the game as on its first start</string>
     <string name="opt_about">About</string>
+    <string name="crash_title">The game closed unexpectedly</string>
+    <string name="crash_text">A crash log was saved. If you report the problem (for example as an issue on GitHub), please attach it. It shows where the game crashed, the app version, the game version, your device model and the settings in use. It contains no personal data.</string>
+    <string name="crash_share">Share crash log</string>
+    <string name="crash_share_all">Share crash logs</string>
+    <string name="crash_not_now">Not now</string>
+    <string name="crash_subject">Wind Waker HD crash log</string>
     <string name="opt_quit">Quit</string>
     <string name="menu_capture">Capture frame (debugging)</string>
     <string name="menu_clear_shaders">Delete shader cache…</string>

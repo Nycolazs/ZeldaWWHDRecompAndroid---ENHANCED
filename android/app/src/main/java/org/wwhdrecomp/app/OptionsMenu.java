@@ -483,6 +483,19 @@ final class OptionsMenu extends Dialog {
                     a.editHud();
                 });
         choice(R.string.opt_ao, 0, a.getResources().getStringArray(R.array.ao_modes), Native.getOption("ao_mode"), a::setAo);
+        {  // bloom strength, percent (100: the original game)
+            int[] pcts = {0, 25, 50, 75, 100, 125, 150, 200};
+            String[] labels = new String[pcts.length];
+            int cur = 4, saved = a.prefs.getInt("bloom_strength", 100);
+            for (int i = 0; i < pcts.length; i++) {
+                labels[i] = pcts[i] == 0 ? a.getString(R.string.opt_off) : pcts[i] + "%";
+                if (pcts[i] == saved) cur = i;
+            }
+            choice(R.string.opt_bloom, R.string.opt_bloom_hint, labels, cur, i -> {
+                a.prefs.edit().putInt("bloom_strength", pcts[i]).apply();
+                Native.setOption("bloom_strength", pcts[i]);
+            });
+        }
         toggle(R.string.opt_ao_hires, 0, Native.getOption("ao_hires") != 0, on -> a.setBool("ao_hires", on));
         toggle(R.string.opt_aniso, 0, Native.getOption("aniso") != 0, on -> a.setBool("aniso", on));
         submenu(R.string.opt_perf, R.string.opt_perf_hint, a.getString(a.prefs.getBoolean("perf_hud", false) ? R.string.opt_on : R.string.opt_off),
@@ -586,9 +599,10 @@ final class OptionsMenu extends Dialog {
                 : a.getString(R.string.ptbr_not_installed), () -> openPage(this::ptbrPage));
         submenu(R.string.opt_cheats, R.string.opt_cheats_hint, "", () -> openPage(this::cheatsPage));
         int[] labels = {R.string.opt_mod_direct_camera, R.string.opt_mod_first_person, R.string.opt_mod_climb,
-                        R.string.opt_mod_quick_doors, R.string.opt_mod_fast_scenes};
+                        R.string.opt_mod_quick_doors, R.string.opt_mod_fast_scenes, R.string.opt_mod_ff_cutscenes,
+                        R.string.opt_mod_ff_dialogues};
         int[] hints = {R.string.opt_mod_direct_camera_hint, 0, R.string.opt_mod_climb_hint, R.string.opt_mod_speed_hint,
-                       R.string.opt_mod_speed_hint};
+                       R.string.opt_mod_speed_hint, R.string.opt_mod_ff_hint, R.string.opt_mod_ff_hint};
         for (int i = 0; i < MainActivity.MODS.length; i++) {
             String key = MainActivity.MODS[i];
             toggle(labels[i], hints[i], a.prefs.getBoolean(key, false), on -> a.setMod(key, on));

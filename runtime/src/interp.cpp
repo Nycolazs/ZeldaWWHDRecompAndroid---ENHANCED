@@ -271,8 +271,13 @@ void cadence_logic(uint64_t now) {
     else
         g_next_logic_due += period;
 }
+uint64_t g_passes = 0;  // counts passes (per-frame function calls)
 // last camera state that was drawn normally, per camera process
-struct Prev { uint32_t cam = 0; CamState s{}; bool valid = false; };
+struct Prev {
+    uint32_t cam = 0; CamState s{}; bool valid = false;
+    CamState drawn{};          // the camera as camera_draw drew it on pass drawn_pass (halfway or exact)
+    uint64_t drawn_pass = ~0ull;
+};
 Prev g_prev[4];
 
 Prev* prev_for(uint32_t cam) {
@@ -343,6 +348,8 @@ static void camera_draw(Cpu* c) {
     if (g_logic_pass && !true60::runs_60(cam)) {  // halfway between the step drawn last (N) and the new one (N+1)
         CamState cur = read_cam(cam);
         if (p->valid) write_cam(cam, blend(p->s, cur));
+        p->drawn = read_cam(cam);
+        p->drawn_pass = g_passes;
         g_cam_blended = p->valid;
         f_024FFC40_orig(c);
         g_cam_blended = false;
@@ -355,7 +362,10 @@ static void camera_draw(Cpu* c) {
     }
     p->s = read_cam(cam);  // exact step: remember it for the next halfway frame
     p->valid = true;
+    p->drawn = p->s;
+    p->drawn_pass = g_passes;
     if (g_hold && true60::enabled()) {  // true 60: the half pass's camera is a preview (true60.cpp)
+        p->drawn_pass = ~0ull;  // (drawn with the preview: the stars keep the camera as it is)
         true60::camera_draw_preview(true);
         f_024FFC40_orig(c);
         true60::camera_draw_preview(false);
@@ -415,11 +425,15 @@ uint64_t g_hold_passes = 0;  // counts hold passes (record generation)
 // passes that record model history: hold passes, and at 40 fps every pass (consecutive logic
 // passes each blend from the step before)
 uint64_t g_model_pass = 0;
-struct ModelStats { uint32_t blended = 0, fresh = 0, cut = 0; std::atomic<uint32_t> changed{0}; } g_mstats;
-// halfway matrices waiting for the model's UBO update (update_ubo thread), per model
-struct UboBlend { uint32_t mtx = 0; std::vector<uint32_t> exact, mid; };
+struct ModelStats { uint32_t blended = 0, fresh = 0, cut = 0; } g_mstats;
+// models whose UBO update of this pass already ran on the main thread (halfway), per model: the
+// update_ubo job skips that many of its updates. (The update used to stay on the job thread with
+// the halfway matrices written into the model around it, i.e. in guest memory while the main thread
+// was still drawing: whatever it attached to the model in that window - an item in Link's hand,
+// parts of the boat - was placed from the halfway matrices and blended a second time: random
+// one-frame jumps of carried and attached models. Original project 764a455, issue #68.)
 std::mutex g_ubo_mu;
-std::unordered_map<uint32_t, UboBlend> g_ubo;
+std::unordered_map<uint32_t, uint32_t> g_ubo_done;
 
 float wf(uint32_t w) { return u32_as_f32(__builtin_bswap32(w)); }
 uint32_t fw(float f) { return __builtin_bswap32(f32_as_u32(f)); }
@@ -568,40 +582,35 @@ extern "C" void hook_027F55FC(Cpu* c) {
     }
     g_mstats.blended++;
     trace_model("halfway", jnt, n, mid.data());
+    {
+        std::lock_guard<std::mutex> lk(g_ubo_mu);
+        g_ubo_done[model]++;  // (before viewCalc queues the model for the job)
+    }
     memcpy(ppc_ptr(mtx), mid.data(), 4 * words);
     f_027F55FC_orig(c);
+    const uint32_t r3 = c->r[3];
+    c->r[3] = model;
+    f_027F5018_orig(c);  // the model's UBO update, here and now on the halfway matrices
+    c->r[3] = r3;
     memcpy(ppc_ptr(mtx), saved.data(), 4 * words);
-    std::lock_guard<std::mutex> lk(g_ubo_mu);
-    g_ubo[model] = UboBlend{mtx, std::move(saved), std::move(mid)};
 }
 
 // J3DModel UBO update (027F5018), run by the "update_ubo" job thread while the main thread is
-// still drawing: copies the world matrices into the model's uniform buffers. On logic passes it
-// runs on the halfway matrices prepared by viewCalc, then the exact ones are put back.
+// still drawing: copies the world matrices into the model's uniform buffers. A model blended by
+// the viewCalc hook had its update there already (on the halfway matrices): skipped here.
 extern "C" void hook_027F5018(Cpu* c) {
     using namespace interp;
-    uint32_t model = c->r[3];
-    UboBlend b;
+    const uint32_t model = c->r[3];
     {
         std::lock_guard<std::mutex> lk(g_ubo_mu);
-        auto it = g_ubo.find(model);
-        if (!enabled()) g_ubo.clear();  // switched off since viewCalc
-        if (!enabled() || it == g_ubo.end()) {
-            f_027F5018_orig(c);
+        if (!enabled()) g_ubo_done.clear();  // switched off since viewCalc
+        auto it = g_ubo_done.find(model);
+        if (it != g_ubo_done.end()) {
+            if (--it->second == 0) g_ubo_done.erase(it);
             return;
         }
-        b = std::move(it->second);
-        g_ubo.erase(it);
     }
-    const size_t bytes = 4 * b.exact.size();
-    if (memcmp(ppc_ptr(b.mtx), b.exact.data(), bytes) != 0) {  // changed since viewCalc
-        g_mstats.changed++;
-        f_027F5018_orig(c);
-        return;
-    }
-    memcpy(ppc_ptr(b.mtx), b.mid.data(), bytes);
     f_027F5018_orig(c);
-    memcpy(ppc_ptr(b.mtx), b.exact.data(), bytes);
 }
 
 // Per-frame function (0203593C): WWHD's own per-frame systems (HD menus, system UI, lighting setup)
@@ -617,7 +626,7 @@ void ss_reset() {
     g_models.clear();
     {
         std::lock_guard<std::mutex> lk(g_ubo_mu);
-        g_ubo.clear();
+        g_ubo_done.clear();
     }
     g_hold_passes += 8;  // step-stamped histories (models, effects) no longer match
     g_model_pass += 8;
@@ -666,6 +675,7 @@ static void menu30_update() {
 
 extern "C" void hook_0203593C(Cpu* c) {
     using namespace interp;
+    g_passes++;
     menu30_update();
     fx_pass_start();
     ss::service(c);  // save states: exact values are back in guest memory, all other threads idle
@@ -685,10 +695,9 @@ extern "C" void hook_0203593C(Cpu* c) {
         static uint64_t n = 0, t0 = timebase::now();
         if (++n % 300 == 0) {
             uint64_t t = timebase::now();
-            LOG("[interp] %.1f logic steps/s; %.1f generated frames dropped/step; models per step: %.1f blended, %.1f new, %.1f cut, %.1f changed before UBO update",
+            LOG("[interp] %.1f logic steps/s; %.1f generated frames dropped/step; models per step: %.1f blended, %.1f new, %.1f cut",
                 300.0 * timebase::kTicksPerSec / (double)(t - t0), g_dropped_holds / 300.0,
-                g_mstats.blended / 300.0, g_mstats.fresh / 300.0, g_mstats.cut / 300.0,
-                g_mstats.changed.exchange(0) / 300.0);
+                g_mstats.blended / 300.0, g_mstats.fresh / 300.0, g_mstats.cut / 300.0);
             t0 = t;
             g_dropped_holds = 0;
             g_mstats.blended = g_mstats.fresh = g_mstats.cut = 0;
@@ -719,7 +728,7 @@ extern "C" void hook_0203593C(Cpu* c) {
         g_logic_steps++;
         {
             std::lock_guard<std::mutex> lk(g_ubo_mu);
-            g_ubo.clear();
+            g_ubo_done.clear();
         }
         g_exact_catchup.store(true, std::memory_order_relaxed);
         f_0203593C_orig(c);
@@ -736,6 +745,10 @@ extern "C" void hook_0203593C(Cpu* c) {
         g_hold_passes++;
         g_model_pass++;
         if (mode40()) phase40 = 1;
+        {
+            std::lock_guard<std::mutex> lk(g_ubo_mu);
+            g_ubo_done.clear();  // (an update of the last pass the job never got to)
+        }
         f_0203593C_orig(c);
         g_hold_frame = false;
         g_hold = false;
@@ -744,7 +757,7 @@ extern "C" void hook_0203593C(Cpu* c) {
     }
     {
         std::lock_guard<std::mutex> lk(g_ubo_mu);
-        g_ubo.clear();  // not updated last time (not drawn)
+        g_ubo_done.clear();  // not updated last time (not drawn)
     }
     static const float kW40[4] = {0.5f, 0.75f, 0.5f, 0.25f};
     const bool m40 = mode40();
@@ -878,7 +891,7 @@ extern "C" void hook_02039834(Cpu* c) { g_hold_child_cpu = c; if (!hold_skip_chi
 
 // logic parts of fpcM_Management / fapGm_Execute, skipped on hold passes
 // debug: WWHD_INTERP_RUN=mask runs selected parts on hold passes too
-// (1 execute, 2 delete, 4 priority, 8 create, 16 fapGm_After, 32 counter)
+// (1 execute, 2 delete, 4 priority, 8 create, 16 fapGm_After, 32 counter, 64 HD UI screens)
 static bool skip(int bit) {
     static const int run = getenv("WWHD_INTERP_RUN") ? atoi(getenv("WWHD_INTERP_RUN")) : 0;
     return interp::g_hold && !(run & bit);
@@ -898,6 +911,14 @@ extern "C" void hook_025E0EE4(Cpu* c) { if (skip(4)) c->r[3] = 1; else f_025E0EE
 extern "C" void hook_025DDCEC(Cpu* c) { if (skip(8)) c->r[3] = 1; else f_025DDCEC_orig(c); }
 extern "C" void hook_025D42C4(Cpu* c) { if (!skip(16)) f_025D42C4_orig(c); }
 extern "C" void hook_0200E6EC(Cpu* c) { if (!skip(32)) f_0200E6EC_orig(c); }
+// WWHD's addition at the end of fpcM_Management (025DFA58): the HD UI manager (*101F8344) updates
+// three of its screens (vtable +0x5C of the objects at +0x214, +0x1EC and +0x1E4; +0x1EC is the TV
+// pause screen): state machines and frame-counted layout animations, i.e. logic. Run on every pass,
+// their fades ran twice as fast, and the TV pause screen, closed by the menu on a logic pass, could
+// reopen itself on the next hold pass, so the menu would not close (original project c188361,
+// issues #64, #73, #74). Once per logic step, as at 30 fps (true 60 too: these screens are 30 Hz logic).
+extern "C" void f_02715310_orig(Cpu* c);
+extern "C" void hook_02715310(Cpu* c) { if (!skip(64)) f_02715310_orig(c); }
 
 namespace interp {
 // The pads are read at the end of every frame. JUTGamePad derives "pressed this frame" from
@@ -1007,4 +1028,31 @@ extern "C" void hook_020315CC(Cpu* c) {
         done_for = g_logic_steps;
     }
     f_020315CC_orig(c);
+}
+
+// The night sky's stars (dKyr_drawStar 02574144, from the star packet's draw, which runs when the
+// pass's draw lists are painted, after the per-frame function) are placed around the camera's eye
+// as it is at that moment: the exact step, as camera_draw put it back. The pass was drawn with the
+// blended camera, so on blended frames the stars sat around another eye than the one they were seen
+// from and jumped back and forth while the camera moved (issue #68, "stars on the sky at night").
+// They are placed with the camera as the pass drew it.
+extern "C" void f_02574144_orig(Cpu* c);
+extern "C" void hook_02574144(Cpu* c) {
+    using namespace interp;
+    if (!enabled()) {
+        f_02574144_orig(c);
+        return;
+    }
+    CamState exact[4];
+    bool swapped[4] = {};
+    for (int i = 0; i < 4; i++) {
+        Prev& p = g_prev[i];
+        if (!p.cam || p.drawn_pass != g_passes) continue;
+        exact[i] = read_cam(p.cam);
+        write_cam(p.cam, p.drawn);
+        swapped[i] = true;
+    }
+    f_02574144_orig(c);
+    for (int i = 3; i >= 0; i--)
+        if (swapped[i]) write_cam(g_prev[i].cam, exact[i]);
 }
